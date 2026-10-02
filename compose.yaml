@@ -26,11 +26,8 @@ services:
       N8N_SECURE_COOKIE: "false"
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_PERSONALIZATION_ENABLED: "false"
-      HERMES_OS_TOKEN: ${HERMES_OS_TOKEN}
     volumes:
       - n8n_data:/home/node/.n8n
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
       - hermes-os
 
@@ -42,11 +39,8 @@ services:
       - "${HERMES_OS_BIND:-127.0.0.1}:${NODERED_PORT:-1880}:1880"
     environment:
       TZ: ${TZ:-America/Bogota}
-      HERMES_OS_TOKEN: ${HERMES_OS_TOKEN}
     volumes:
       - nodered_data:/data
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
       - hermes-os
 
