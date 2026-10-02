@@ -1,0 +1,73 @@
+name: hermes-os
+
+services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: hermes-os-mqtt
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+      - mqtt_data:/mosquitto/data
+      - mqtt_log:/mosquitto/log
+    networks:
+      - hermes-os
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: hermes-os-n8n
+    restart: unless-stopped
+    ports:
+      - "${HERMES_OS_BIND:-127.0.0.1}:${N8N_PORT:-5678}:5678"
+    environment:
+      TZ: ${TZ:-America/Bogota}
+      GENERIC_TIMEZONE: ${TZ:-America/Bogota}
+      N8N_SECURE_COOKIE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      HERMES_OS_TOKEN: ${HERMES_OS_TOKEN}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - hermes-os
+
+  nodered:
+    image: nodered/node-red:latest
+    container_name: hermes-os-nodered
+    restart: unless-stopped
+    ports:
+      - "${HERMES_OS_BIND:-127.0.0.1}:${NODERED_PORT:-1880}:1880"
+    environment:
+      TZ: ${TZ:-America/Bogota}
+      HERMES_OS_TOKEN: ${HERMES_OS_TOKEN}
+    volumes:
+      - nodered_data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - hermes-os
+
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: hermes-os-homeassistant
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    environment:
+      TZ: ${TZ:-America/Bogota}
+    volumes:
+      - ./homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+
+networks:
+  hermes-os:
+    name: hermes-os
+
+volumes:
+  mqtt_data:
+  mqtt_log:
+  n8n_data:
+  nodered_data:
