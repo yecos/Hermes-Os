@@ -1,0 +1,9 @@
+default_config:
+
+homeassistant:
+  name: Hermes OS
+  time_zone: America/Bogota
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
