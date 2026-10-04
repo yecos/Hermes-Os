@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
@@ -299,6 +300,20 @@ class DesktopShellView(
                 isClickable = true
                 isFocusable = true
                 setOnClickListener { openCommandPalette() }
+                setOnHoverListener { _, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_HOVER_ENTER -> {
+                            background = rounded(
+                                Color.argb(150, 18, 35, 52),
+                                dp(18),
+                                Color.argb(145, 104, 213, 255),
+                                1
+                            )
+                        }
+                        MotionEvent.ACTION_HOVER_EXIT -> updatePaletteVisual()
+                    }
+                    false
+                }
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(16), 0, dp(10), 0)
                 background = rounded(Color.argb(120, 18, 25, 39), dp(18), border, 1)
@@ -416,6 +431,18 @@ class DesktopShellView(
                     selectedIndex = index
                     refreshSelection()
                     launch(app)
+                }
+                setOnHoverListener { _, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_HOVER_ENTER,
+                        MotionEvent.ACTION_HOVER_MOVE -> {
+                            if (selectedIndex != index) {
+                                selectedIndex = index
+                                refreshSelection()
+                            }
+                        }
+                    }
+                    false
                 }
             }
 
@@ -535,6 +562,30 @@ class DesktopShellView(
                 0
             )
             setOnClickListener { action() }
+            setOnHoverListener { _, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_HOVER_ENTER -> {
+                        background = rounded(
+                            if (highlighted) Color.argb(105, 104, 213, 255)
+                            else Color.argb(48, 255, 255, 255),
+                            dp(15),
+                            if (highlighted) Color.argb(120, 104, 213, 255) else border,
+                            1
+                        )
+                        animate().scaleX(1.06f).scaleY(1.06f).setDuration(90).start()
+                    }
+                    MotionEvent.ACTION_HOVER_EXIT -> {
+                        background = rounded(
+                            if (highlighted) accentSoft else Color.TRANSPARENT,
+                            dp(15),
+                            null,
+                            0
+                        )
+                        animate().scaleX(1f).scaleY(1f).setDuration(90).start()
+                    }
+                }
+                false
+            }
 
             addView(TextView(context).apply {
                 text = glyph
@@ -572,6 +623,24 @@ class DesktopShellView(
                 isClickable = true
                 isFocusable = true
                 setOnClickListener { launch(app) }
+                setOnHoverListener { _, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_HOVER_ENTER -> {
+                            background = rounded(
+                                Color.argb(55, 104, 213, 255),
+                                dp(13),
+                                Color.argb(85, 104, 213, 255),
+                                1
+                            )
+                            animate().scaleX(1.06f).scaleY(1.06f).setDuration(90).start()
+                        }
+                        MotionEvent.ACTION_HOVER_EXIT -> {
+                            background = rounded(Color.TRANSPARENT, dp(13), null, 0)
+                            animate().scaleX(1f).scaleY(1f).setDuration(90).start()
+                        }
+                    }
+                    false
+                }
 
                 addView(ImageView(context).apply {
                     setImageDrawable(app.icon)
