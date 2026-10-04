@@ -33,6 +33,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     private var externalDisplayName: String? = null
     private var mode = DesktopMode.DESKTOP
     private var searchQuery = ""
+    private var shellVisible = true
 
     private var displayWidth = 1920
     private var displayHeight = 1080
@@ -71,7 +72,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     override fun onResume() {
         super.onResume()
         displayManager.registerDisplayListener(this, null)
-        attachBestExternalDisplay()
+        if (shellVisible) attachBestExternalDisplay()
         setContentView(phoneController())
     }
 
@@ -97,6 +98,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             shellView = null
             externalDisplayId = null
             externalDisplayName = null
+            shellVisible = true
             setContentView(phoneController())
         }
     }
@@ -129,6 +131,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         externalDisplayId = target.displayId
         externalDisplayName = target.name
 
+        shellVisible = true
         presentation = DesktopPresentation(this, target) { displayContext ->
             desktopShell(target.displayId, displayContext)
         }.also {
@@ -297,7 +300,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             navigationAction(KeyEvent.KEYCODE_BACK)
         }, rowWeight())
         navRow.addView(actionButton("●", "Inicio") {
-            navigationAction(KeyEvent.KEYCODE_HOME)
+            showDesktopHome()
         }, rowWeight())
         navRow.addView(actionButton("▣", "Recientes") {
             val id = externalDisplayId
@@ -576,12 +579,25 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     private fun setMode(newMode: DesktopMode) {
         if (mode == newMode) return
         mode = newMode
-        if (externalDisplayId != null) attachBestExternalDisplay(force = true)
+        if (externalDisplayId != null && shellVisible) attachBestExternalDisplay(force = true)
         else setContentView(phoneController())
     }
 
     private fun launchApp(app: AppEntry, displayId: Int) =
         launchPackage(app.packageName, displayId)
+
+    private fun hideDesktopShell() {
+        shellVisible = false
+        presentation?.dismiss()
+        presentation = null
+        shellView = null
+        setContentView(phoneController())
+    }
+
+    private fun showDesktopHome() {
+        shellVisible = true
+        attachBestExternalDisplay(force = true)
+    }
 
     @Suppress("DEPRECATION")
     private fun launchPackage(packageName: String, displayId: Int) {
@@ -593,6 +609,8 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
 
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val options = ActivityOptions.makeBasic()
+
+        hideDesktopShell()
 
         runCatching {
             options.launchDisplayId = displayId
@@ -612,6 +630,8 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         }.recoverCatching {
             startActivity(intent)
         }.onFailure {
+            shellVisible = true
+            attachBestExternalDisplay(force = true)
             Toast.makeText(
                 this,
                 "Android bloqueó el lanzamiento en esa pantalla",
