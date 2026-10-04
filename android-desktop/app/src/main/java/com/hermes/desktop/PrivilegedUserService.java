@@ -5,7 +5,9 @@ import android.view.InputDevice;
 import android.view.InputEvent;
 import android.view.MotionEvent;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -360,6 +362,61 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
         return shellOk(command.toArray(new String[0]));
     }
 
+
+    @Override
+    public String listTasks(int displayId) {
+        String output = shellOutput("/system/bin/dumpsys", "activity", "activities");
+        if (output == null) return "";
+        return output;
+    }
+
+    @Override
+    public boolean focusTask(int taskId) {
+        return shellOk(
+                "/system/bin/am", "task", "focus", String.valueOf(taskId)
+        );
+    }
+
+    @Override
+    public boolean closeTask(int taskId) {
+        try {
+            Class<?> clazz = Class.forName("android.app.ActivityTaskManager");
+            Method getService = clazz.getDeclaredMethod("getService");
+            getService.setAccessible(true);
+            Object service = getService.invoke(null);
+            Method removeTask = service.getClass().getMethod("removeTask", int.class);
+            Object result = removeTask.invoke(service, taskId);
+            return !(result instanceof Boolean) || ((Boolean) result);
+        } catch (Throwable ignored) {
+            String output = shellOutput(
+                    "/system/bin/cmd", "activity", "task", "remove", String.valueOf(taskId)
+            );
+            return output != null && !output.toLowerCase().contains("error");
+        }
+    }
+
+    @Override
+    public boolean resizeTask(int taskId, int left, int top, int right, int bottom) {
+        setTaskResizable(taskId, 2);
+        return shellOk(
+                "/system/bin/am", "task", "resize",
+                String.valueOf(taskId),
+                String.valueOf(left),
+                String.valueOf(top),
+                String.valueOf(right),
+                String.valueOf(bottom)
+        );
+    }
+
+    @Override
+    public boolean setTaskResizable(int taskId, int mode) {
+        return shellOk(
+                "/system/bin/am", "task", "resizeable",
+                String.valueOf(taskId),
+                String.valueOf(mode)
+        );
+    }
+
     private boolean injectMouse(
             int displayId,
             int action,
@@ -403,6 +460,31 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
                         : androidPath + ":" + inheritedPath
         );
         return builder;
+    }
+
+
+    private String shellOutput(String... command) {
+        java.lang.Process process = null;
+        try {
+            process = androidProcessBuilder(command).start();
+            StringBuilder out = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream())
+            )) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    out.append(line).append('\n');
+                }
+            }
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                process.destroy();
+                return null;
+            }
+            return out.toString();
+        } catch (Throwable ignored) {
+            if (process != null) process.destroy();
+            return null;
+        }
     }
 
     private boolean shellOk(String... command) {
