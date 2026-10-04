@@ -125,11 +125,11 @@ class DesktopShellView(
     fun handleExternalKey(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return false
 
-        if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_K) {
-            paletteActive = true
-            keyboardQuery = ""
-            setSearchQuery("")
-            updatePaletteVisual()
+        if ((event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_K) ||
+            event.keyCode == KeyEvent.KEYCODE_SLASH ||
+            event.keyCode == KeyEvent.KEYCODE_SEARCH
+        ) {
+            openCommandPalette()
             return true
         }
 
@@ -225,6 +225,14 @@ class DesktopShellView(
         if (::commandBar.isInitialized) updatePaletteVisual()
     }
 
+    private fun openCommandPalette() {
+        paletteActive = true
+        keyboardQuery = ""
+        setSearchQuery("")
+        updatePaletteVisual()
+        requestFocus()
+    }
+
     private fun updatePaletteVisual() {
         if (!::commandBar.isInitialized) return
         commandBar.background = rounded(
@@ -288,6 +296,9 @@ class DesktopShellView(
 
             commandBar = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { openCommandPalette() }
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(16), 0, dp(10), 0)
                 background = rounded(Color.argb(120, 18, 25, 39), dp(18), border, 1)
