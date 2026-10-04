@@ -23,6 +23,8 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
     private java.lang.Process virtualMouseProcess;
     private BufferedWriter virtualMouseWriter;
     private String virtualMouseError;
+    private float virtualMouseRemainderX;
+    private float virtualMouseRemainderY;
 
     public PrivilegedUserService() {
         initializeInputBridge();
@@ -133,12 +135,19 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
 
     @Override
     public boolean virtualMouseMove(float dx, float dy) {
-        int relX = Math.round(dx);
-        int relY = Math.round(dy);
-        if (relX == 0 && relY == 0) return true;
-
         synchronized (virtualMouseLock) {
             if (!ensureVirtualMouseLocked()) return false;
+
+            virtualMouseRemainderX += dx;
+            virtualMouseRemainderY += dy;
+
+            int relX = (int) virtualMouseRemainderX;
+            int relY = (int) virtualMouseRemainderY;
+            virtualMouseRemainderX -= relX;
+            virtualMouseRemainderY -= relY;
+
+            if (relX == 0 && relY == 0) return true;
+
             return injectVirtualEventsLocked(
                     2, 0, relX,
                     2, 1, relY,
@@ -270,6 +279,8 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
             }
             virtualMouseProcess = null;
         }
+        virtualMouseRemainderX = 0f;
+        virtualMouseRemainderY = 0f;
     }
 
     @Override
