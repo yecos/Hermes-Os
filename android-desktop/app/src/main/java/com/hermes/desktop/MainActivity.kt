@@ -62,6 +62,11 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         displayManager = getSystemService(DisplayManager::class.java)
         apps = AppRepository(this).launcherApps()
         pointerProfile = prefs.getString("pointer_profile", "balanced") ?: "balanced"
+        mode = if (prefs.getString("desktop_mode", "desktop") == "tv") {
+            DesktopMode.TV
+        } else {
+            DesktopMode.DESKTOP
+        }
         recentPackages.clear()
         recentPackages += prefs.getString("recent_packages", "")
             .orEmpty()
@@ -133,10 +138,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             .firstOrNull { it.displayId != primaryId && it.state == Display.STATE_ON }
             ?: return
 
-        if (!force &&
-            externalDisplayId == target.displayId &&
-            presentation?.isShowing == true
-        ) return
+        if (!force && externalDisplayId == target.displayId) return
 
         val metrics = android.util.DisplayMetrics()
         target.getRealMetrics(metrics)
@@ -157,18 +159,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
 
         shellVisible = true
-        presentation = DesktopPresentation(this, target) { displayContext ->
-            desktopShell(target.displayId, displayContext)
-        }.also {
-            runCatching { it.show() }
-                .onFailure { error ->
-                    Toast.makeText(
-                        this,
-                        "No se pudo abrir escritorio: " + error.message,
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-        }
+        launchDesktopActivity(target.displayId)
 
         if (::shizuku.isInitialized && shizuku.isReady) {
             shizuku.startVirtualMouse()
@@ -821,8 +812,15 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     private fun setMode(newMode: DesktopMode) {
         if (mode == newMode) return
         mode = newMode
-        if (externalDisplayId != null && shellVisible) attachBestExternalDisplay(force = true)
-        else setContentView(phoneController())
+        prefs.edit()
+            .putString("desktop_mode", if (newMode == DesktopMode.TV) "tv" else "desktop")
+            .apply()
+
+        val id = externalDisplayId
+        if (id != null && shellVisible) {
+            launchDesktopActivity(id)
+        }
+        setContentView(phoneController())
     }
 
     private fun launchApp(app: AppEntry, displayId: Int) {
@@ -847,7 +845,36 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
 
     private fun showDesktopHome() {
         shellVisible = true
-        attachBestExternalDisplay(force = true)
+        val id = externalDisplayId
+        if (id != null) {
+            launchDesktopActivity(id)
+        } else {
+            attachBestExternalDisplay(force = true)
+        }
+    }
+
+    private fun launchDesktopActivity(displayId: Int) {
+        val intent = Intent(this, DesktopActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            putExtra(
+                DesktopActivity.EXTRA_MODE,
+                if (mode == DesktopMode.TV) "tv" else "desktop"
+            )
+        }
+
+        val options = ActivityOptions.makeBasic().apply {
+            launchDisplayId = displayId
+        }
+
+        runCatching {
+            startActivity(intent, options.toBundle())
+        }.onFailure { error ->
+            Toast.makeText(
+                this,
+                "No se pudo abrir Hermes en el monitor: " + error.message,
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     @Suppress("DEPRECATION")
