@@ -5,8 +5,8 @@ import android.view.InputDevice;
 import android.view.InputEvent;
 import android.view.MotionEvent;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.BufferedWriter;
+import java.io.OutputStreamWriter;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +18,11 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
     private Method injectInputEvent;
     private Method setDisplayId;
     private Method setButtonState;
+
+    private final Object virtualMouseLock = new Object();
+    private java.lang.Process virtualMouseProcess;
+    private BufferedWriter virtualMouseWriter;
+    private String virtualMouseError;
 
     public PrivilegedUserService() {
         initializeInputBridge();
@@ -55,8 +60,216 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
 
     @Override
     public String status() {
+        boolean uinputReady;
+        synchronized (virtualMouseLock) {
+            uinputReady = virtualMouseProcess != null && virtualMouseProcess.isAlive() && virtualMouseWriter != null;
+        }
         return "uid=" + Process.myUid()
-                + ";directInput=" + (inputManager != null && injectInputEvent != null);
+                + ";directInput=" + (inputManager != null && injectInputEvent != null)
+                + ";uinputMouse=" + uinputReady
+                + (virtualMouseError == null ? "" : ";uinputError=" + virtualMouseError);
+    }
+
+    @Override
+    public boolean startVirtualMouse() {
+        synchronized (virtualMouseLock) {
+            if (virtualMouseProcess != null && virtualMouseProcess.isAlive() && virtualMouseWriter != null) {
+                return true;
+            }
+
+            stopVirtualMouseLocked();
+            virtualMouseError = null;
+
+            try {
+                ProcessBuilder builder = androidProcessBuilder("/system/bin/uinput", "-");
+                virtualMouseProcess = builder.start();
+                virtualMouseWriter = new BufferedWriter(
+                        new OutputStreamWriter(virtualMouseProcess.getOutputStream())
+                );
+
+                // Android 12 uinput parser uses numeric ioctl/event codes.
+                writeVirtualMouseLocked(
+                        "{"
+                                + "\"id\":501,"
+                                + "\"command\":\"register\","
+                                + "\"name\":\"Hermes Virtual Mouse\","
+                                + "\"vid\":6353,"
+                                + "\"pid\":20560,"
+                                + "\"bus\":\"usb\","
+                                + "\"configuration\":["
+                                + "{\"type\":100,\"data\":[1,2]},"
+                                + "{\"type\":101,\"data\":[272,273,274,277,278]},"
+                                + "{\"type\":102,\"data\":[0,1,6,8]}"
+                                + "]"
+                                + "}"
+                );
+                writeVirtualMouseLocked(
+                        "{\"id\":501,\"command\":\"delay\",\"duration\":650}"
+                );
+
+                // Keep stdin open so the uinput device stays registered.
+                virtualMouseWriter.flush();
+                try {
+                    Thread.sleep(750);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+
+                if (!virtualMouseProcess.isAlive()) {
+                    virtualMouseError = "uinput exited";
+                    stopVirtualMouseLocked();
+                    return false;
+                }
+
+                return true;
+            } catch (Throwable error) {
+                virtualMouseError = error.getClass().getSimpleName()
+                        + (error.getMessage() == null ? "" : ":" + error.getMessage());
+                stopVirtualMouseLocked();
+                return false;
+            }
+        }
+    }
+
+    @Override
+    public boolean virtualMouseMove(float dx, float dy) {
+        int relX = Math.round(dx);
+        int relY = Math.round(dy);
+        if (relX == 0 && relY == 0) return true;
+
+        synchronized (virtualMouseLock) {
+            if (!ensureVirtualMouseLocked()) return false;
+            return injectVirtualEventsLocked(
+                    2, 0, relX,
+                    2, 1, relY,
+                    0, 0, 0
+            );
+        }
+    }
+
+    @Override
+    public boolean virtualMouseButton(int button, boolean down) {
+        int code = buttonCode(button);
+        if (code == 0) return false;
+
+        synchronized (virtualMouseLock) {
+            if (!ensureVirtualMouseLocked()) return false;
+            return injectVirtualEventsLocked(
+                    1, code, down ? 1 : 0,
+                    0, 0, 0
+            );
+        }
+    }
+
+    @Override
+    public boolean virtualMouseClick(int button) {
+        int code = buttonCode(button);
+        if (code == 0) return false;
+
+        synchronized (virtualMouseLock) {
+            if (!ensureVirtualMouseLocked()) return false;
+            return injectVirtualEventsLocked(
+                    1, code, 1,
+                    0, 0, 0,
+                    1, code, 0,
+                    0, 0, 0
+            );
+        }
+    }
+
+    @Override
+    public boolean virtualMouseScroll(int vertical, int horizontal) {
+        if (vertical == 0 && horizontal == 0) return true;
+
+        synchronized (virtualMouseLock) {
+            if (!ensureVirtualMouseLocked()) return false;
+
+            List<Integer> values = new ArrayList<>();
+            if (vertical != 0) {
+                values.add(2);
+                values.add(8); // REL_WHEEL
+                values.add(vertical);
+            }
+            if (horizontal != 0) {
+                values.add(2);
+                values.add(6); // REL_HWHEEL
+                values.add(horizontal);
+            }
+            values.add(0);
+            values.add(0);
+            values.add(0);
+
+            int[] events = new int[values.size()];
+            for (int i = 0; i < values.size(); i++) events[i] = values.get(i);
+            return injectVirtualEventsLocked(events);
+        }
+    }
+
+    @Override
+    public boolean stopVirtualMouse() {
+        synchronized (virtualMouseLock) {
+            stopVirtualMouseLocked();
+            return true;
+        }
+    }
+
+    private int buttonCode(int button) {
+        switch (button) {
+            case 1: return 272; // BTN_LEFT
+            case 2: return 273; // BTN_RIGHT
+            case 3: return 274; // BTN_MIDDLE
+            default: return 0;
+        }
+    }
+
+    private boolean ensureVirtualMouseLocked() {
+        if (virtualMouseProcess != null && virtualMouseProcess.isAlive() && virtualMouseWriter != null) {
+            return true;
+        }
+        return startVirtualMouse();
+    }
+
+    private boolean injectVirtualEventsLocked(int... events) {
+        try {
+            StringBuilder json = new StringBuilder();
+            json.append("{\"id\":501,\"command\":\"inject\",\"events\":[");
+            for (int i = 0; i < events.length; i++) {
+                if (i > 0) json.append(',');
+                json.append(events[i]);
+            }
+            json.append("]}");
+            writeVirtualMouseLocked(json.toString());
+            virtualMouseWriter.flush();
+            return virtualMouseProcess != null && virtualMouseProcess.isAlive();
+        } catch (Throwable error) {
+            virtualMouseError = error.getClass().getSimpleName()
+                    + (error.getMessage() == null ? "" : ":" + error.getMessage());
+            stopVirtualMouseLocked();
+            return false;
+        }
+    }
+
+    private void writeVirtualMouseLocked(String json) throws Exception {
+        if (virtualMouseWriter == null) throw new IllegalStateException("uinput writer unavailable");
+        virtualMouseWriter.write(json);
+        virtualMouseWriter.newLine();
+    }
+
+    private void stopVirtualMouseLocked() {
+        if (virtualMouseWriter != null) {
+            try {
+                virtualMouseWriter.close();
+            } catch (Throwable ignored) {
+            }
+            virtualMouseWriter = null;
+        }
+        if (virtualMouseProcess != null) {
+            try {
+                virtualMouseProcess.destroy();
+            } catch (Throwable ignored) {
+            }
+            virtualMouseProcess = null;
+        }
     }
 
     @Override
@@ -67,10 +280,6 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
             return true;
         }
 
-        // Samsung/older Android builds may reject the hidden InputManager
-        // reflection path even when the Shizuku UserService runs as shell.
-        // Fall back to Android's own input shell command, explicitly targeting
-        // the external display.
         return shellOk(
                 "/system/bin/input", "mouse", "-d", String.valueOf(displayId),
                 "motionevent", "MOVE", String.valueOf(x), String.valueOf(y)
@@ -172,22 +381,23 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
         }
     }
 
+    private ProcessBuilder androidProcessBuilder(String... command) {
+        ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
+        String inheritedPath = builder.environment().get("PATH");
+        String androidPath = "/system/bin:/system/xbin:/vendor/bin:/product/bin";
+        builder.environment().put(
+                "PATH",
+                inheritedPath == null || inheritedPath.isEmpty()
+                        ? androidPath
+                        : androidPath + ":" + inheritedPath
+        );
+        return builder;
+    }
+
     private boolean shellOk(String... command) {
         java.lang.Process process = null;
         try {
-            ProcessBuilder builder = new ProcessBuilder(command)
-                    .redirectErrorStream(true);
-
-            String inheritedPath = builder.environment().get("PATH");
-            String androidPath = "/system/bin:/system/xbin:/vendor/bin:/product/bin";
-            builder.environment().put(
-                    "PATH",
-                    inheritedPath == null || inheritedPath.isEmpty()
-                            ? androidPath
-                            : androidPath + ":" + inheritedPath
-            );
-
-            process = builder.start();
+            process = androidProcessBuilder(command).start();
 
             if (!process.waitFor(3, TimeUnit.SECONDS)) {
                 process.destroy();
@@ -202,6 +412,9 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
 
     @Override
     public void destroy() {
+        synchronized (virtualMouseLock) {
+            stopVirtualMouseLocked();
+        }
         System.exit(0);
     }
 }
