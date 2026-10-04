@@ -63,7 +63,18 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
     public boolean movePointer(int displayId, float x, float y, boolean dragging) {
         int action = dragging ? MotionEvent.ACTION_MOVE : MotionEvent.ACTION_HOVER_MOVE;
         int buttons = dragging ? MotionEvent.BUTTON_PRIMARY : 0;
-        return injectMouse(displayId, action, x, y, buttons);
+        if (injectMouse(displayId, action, x, y, buttons)) {
+            return true;
+        }
+
+        // Samsung/older Android builds may reject the hidden InputManager
+        // reflection path even when the Shizuku UserService runs as shell.
+        // Fall back to Android's own input shell command, explicitly targeting
+        // the external display.
+        return shellOk(
+                "/system/bin/input", "mouse", "-d", String.valueOf(displayId),
+                "motionevent", "MOVE", String.valueOf(x), String.valueOf(y)
+        );
     }
 
     @Override
