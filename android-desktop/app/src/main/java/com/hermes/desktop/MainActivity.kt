@@ -14,6 +14,7 @@ import android.view.Display
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -117,6 +118,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             shellView = null
             externalDisplayId = null
             externalDisplayName = null
+            window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
             shellVisible = true
             setContentView(phoneController())
         }
@@ -149,6 +151,10 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         shellView = null
         externalDisplayId = target.displayId
         externalDisplayName = target.name
+
+        // DeX-like focus model: the phone stays touchable as a controller,
+        // but must not steal keyboard/mouse focus from the external desktop.
+        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
 
         shellVisible = true
         presentation = DesktopPresentation(this, target) { displayContext ->
