@@ -178,6 +178,24 @@ class ShizukuBridge(
             service?.keyCombination(displayId, keyCodes) == true
         }.getOrDefault(false)
 
+    fun startVirtualMouse(): Boolean =
+        runCatching { service?.startVirtualMouse() == true }.getOrDefault(false)
+
+    fun virtualMouseMove(dx: Float, dy: Float): Boolean =
+        runCatching { service?.virtualMouseMove(dx, dy) == true }.getOrDefault(false)
+
+    fun virtualMouseButton(button: Int, down: Boolean): Boolean =
+        runCatching { service?.virtualMouseButton(button, down) == true }.getOrDefault(false)
+
+    fun virtualMouseClick(button: Int): Boolean =
+        runCatching { service?.virtualMouseClick(button) == true }.getOrDefault(false)
+
+    fun virtualMouseScroll(vertical: Int, horizontal: Int = 0): Boolean =
+        runCatching { service?.virtualMouseScroll(vertical, horizontal) == true }.getOrDefault(false)
+
+    fun stopVirtualMouse(): Boolean =
+        runCatching { service?.stopVirtualMouse() == true }.getOrDefault(false)
+
     fun close() {
         Shizuku.removeBinderReceivedListener(binderReceivedListener)
         Shizuku.removeBinderDeadListener(binderDeadListener)
