@@ -29,6 +29,7 @@ class DesktopShellView(
     context: Context,
     private val apps: List<AppEntry>,
     initialMode: DesktopMode,
+    initialRecents: List<AppEntry> = emptyList(),
     private val onLaunchApp: (AppEntry) -> Unit,
     private val onOpenTermux: () -> Unit,
     private val onStartHermes: () -> Unit
@@ -42,12 +43,15 @@ class DesktopShellView(
     private val grid = GridLayout(context)
     private val scroll = ScrollView(context)
     private val recentRow = LinearLayout(context)
+    private lateinit var commandBar: LinearLayout
 
     private var mode = initialMode
+    private var paletteActive = false
+    private var keyboardQuery = ""
     private var filteredApps = apps
     private var selectedIndex = 0
     private val appTiles = mutableListOf<View>()
-    private val recents = mutableListOf<AppEntry>()
+    private val recents = initialRecents.take(5).toMutableList()
 
     private val bgTop = Color.rgb(7, 12, 22)
     private val bgBottom = Color.rgb(13, 20, 34)
@@ -121,6 +125,54 @@ class DesktopShellView(
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
 
+        if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_K) {
+            paletteActive = true
+            keyboardQuery = ""
+            setSearchQuery("")
+            updatePaletteVisual()
+            return true
+        }
+
+        if (paletteActive) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_ESCAPE -> {
+                    paletteActive = false
+                    keyboardQuery = ""
+                    setSearchQuery("")
+                    updatePaletteVisual()
+                    return true
+                }
+                KeyEvent.KEYCODE_DEL -> {
+                    if (keyboardQuery.isNotEmpty()) {
+                        keyboardQuery = keyboardQuery.dropLast(1)
+                        setSearchQuery(keyboardQuery)
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> { navigate(-1, 0); return true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { navigate(1, 0); return true }
+                KeyEvent.KEYCODE_DPAD_UP -> { navigate(0, -1); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { navigate(0, 1); return true }
+                KeyEvent.KEYCODE_ENTER,
+                KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    activateSelection()
+                    paletteActive = false
+                    updatePaletteVisual()
+                    return true
+                }
+            }
+
+            val unicode = event.unicodeChar
+            if (unicode > 0 && !event.isCtrlPressed && !event.isAltPressed) {
+                val ch = unicode.toChar()
+                if (!ch.isISOControl()) {
+                    keyboardQuery += ch
+                    setSearchQuery(keyboardQuery)
+                    return true
+                }
+            }
+        }
+
         return when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> { navigate(-1, 0); true }
             KeyEvent.KEYCODE_DPAD_RIGHT -> { navigate(1, 0); true }
@@ -151,6 +203,7 @@ class DesktopShellView(
     }
 
     fun setSearchQuery(query: String) {
+        keyboardQuery = query
         filteredApps = if (query.isBlank()) {
             apps
         } else {
@@ -159,9 +212,25 @@ class DesktopShellView(
                     it.packageName.contains(query, ignoreCase = true)
             }
         }
-        commandText.text = if (query.isBlank()) "Buscar apps, comandos y espacios" else query
+        commandText.text = when {
+            paletteActive && query.isBlank() -> "Escribe para buscar…"
+            query.isBlank() -> "Buscar apps, comandos y espacios"
+            else -> query
+        }
         selectedIndex = 0
         renderApps()
+        if (::commandBar.isInitialized) updatePaletteVisual()
+    }
+
+    private fun updatePaletteVisual() {
+        if (!::commandBar.isInitialized) return
+        commandBar.background = rounded(
+            if (paletteActive) Color.argb(170, 18, 35, 52) else Color.argb(120, 18, 25, 39),
+            dp(18),
+            if (paletteActive) Color.argb(180, 104, 213, 255) else border,
+            if (paletteActive) 2 else 1
+        )
+        commandText.setTextColor(if (paletteActive) textPrimary else textSecondary)
     }
 
     fun setMode(newMode: DesktopMode) {
@@ -214,7 +283,7 @@ class DesktopShellView(
             }
             addView(brand, LinearLayout.LayoutParams(dp(230), LinearLayout.LayoutParams.MATCH_PARENT))
 
-            val command = LinearLayout(context).apply {
+            commandBar = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(16), 0, dp(10), 0)
@@ -244,7 +313,7 @@ class DesktopShellView(
                     background = rounded(Color.argb(90, 255, 255, 255), dp(9), null, 0)
                 }, LinearLayout.LayoutParams(dp(62), dp(28)))
             }
-            addView(command, LinearLayout.LayoutParams(0, dp(48), 1f))
+            addView(commandBar, LinearLayout.LayoutParams(0, dp(48), 1f))
 
             val system = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
