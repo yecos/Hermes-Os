@@ -15,4 +15,9 @@ interface IPrivilegedBridge {
     boolean virtualMouseClick(int button) = 11;
     boolean virtualMouseScroll(int vertical, int horizontal) = 12;
     boolean stopVirtualMouse() = 13;
+    String listTasks(int displayId) = 14;
+    boolean focusTask(int taskId) = 15;
+    boolean closeTask(int taskId) = 16;
+    boolean resizeTask(int taskId, int left, int top, int right, int bottom) = 17;
+    boolean setTaskResizable(int taskId, int mode) = 18;
 }
