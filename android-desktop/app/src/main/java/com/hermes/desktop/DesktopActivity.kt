@@ -6,6 +6,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.widget.Toast
@@ -18,10 +20,20 @@ class DesktopActivity : Activity() {
 
     private lateinit var shellView: DesktopShellView
     private lateinit var apps: List<AppEntry>
+    private lateinit var shizuku: ShizukuBridge
+    private val handler = Handler(Looper.getMainLooper())
+    private val restoreBounds = mutableMapOf<Int, Rect>()
     private val prefs by lazy { getSharedPreferences("hermes_desktop", MODE_PRIVATE) }
 
     private var mode = DesktopMode.DESKTOP
     private val recentPackages = mutableListOf<String>()
+
+    private val taskRefresh = object : Runnable {
+        override fun run() {
+            refreshRunningTasks()
+            handler.postDelayed(this, 1200)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +46,9 @@ class DesktopActivity : Activity() {
         )
 
         apps = AppRepository(this).launcherApps()
+        shizuku = ShizukuBridge(this) {
+            runOnUiThread { refreshRunningTasks() }
+        }
         restoreState()
         applyIntent(intent)
         renderDesktop()
@@ -104,10 +119,126 @@ class DesktopActivity : Activity() {
             },
             onStartHermes = {
                 TermuxBridge.startHermes(this)
+            },
+            onShowDesktop = {
+                runCatching { shizuku.focusTask(taskId) }
+                shellView.requestFocus()
+            },
+            onTaskAction = { task, action ->
+                handleTaskAction(task, action)
             }
         )
         setContentView(shellView)
-        shellView.post { shellView.requestFocus() }
+        shellView.post {
+            shellView.requestFocus()
+            handler.removeCallbacks(taskRefresh)
+            handler.post(taskRefresh)
+        }
+    }
+
+    private fun refreshRunningTasks() {
+        if (!::shellView.isInitialized || !::shizuku.isInitialized || !shizuku.isReady) {
+            return
+        }
+
+        val displayId = windowManager.defaultDisplay.displayId
+        val raw = shizuku.listTasks(displayId)
+        if (raw.isBlank()) return
+
+        val tasks = DesktopTaskParser.parse(raw, displayId)
+            .filter { it.packageName != packageName }
+            .filter { !it.packageName.startsWith("com.samsung.android.desktop") }
+
+        shellView.updateRunningTasks(tasks)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun displaySize(): Pair<Int, Int> {
+        val metrics = android.util.DisplayMetrics()
+        windowManager.defaultDisplay.getRealMetrics(metrics)
+        return metrics.widthPixels to metrics.heightPixels
+    }
+
+    private fun handleTaskAction(task: DesktopTask, action: DesktopTaskAction) {
+        if (!shizuku.isReady) {
+            Toast.makeText(this, "Shizuku requerido para controlar ventanas", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val (width, height) = displaySize()
+        val taskbarReserve = dp(92)
+        val usableBottom = (height - taskbarReserve).coerceAtLeast(1)
+
+        fun rememberBounds() {
+            task.bounds?.let { bounds ->
+                if (bounds.width() > 0 && bounds.height() > 0) {
+                    restoreBounds[task.taskId] = Rect(bounds)
+                }
+            }
+        }
+
+        when (action) {
+            DesktopTaskAction.FOCUS -> {
+                shizuku.focusTask(task.taskId)
+            }
+
+            DesktopTaskAction.MINIMIZE -> {
+                shizuku.focusTask(taskId)
+                shellView.requestFocus()
+            }
+
+            DesktopTaskAction.MAXIMIZE -> {
+                rememberBounds()
+                shizuku.resizeTask(task.taskId, 0, 0, width, usableBottom)
+                shizuku.focusTask(task.taskId)
+            }
+
+            DesktopTaskAction.RESTORE -> {
+                val restore = restoreBounds[task.taskId] ?: Rect(
+                    width / 8,
+                    height / 10,
+                    width * 7 / 8,
+                    usableBottom - height / 12
+                )
+                shizuku.resizeTask(
+                    task.taskId,
+                    restore.left,
+                    restore.top,
+                    restore.right,
+                    restore.bottom
+                )
+                shizuku.focusTask(task.taskId)
+            }
+
+            DesktopTaskAction.SNAP_LEFT -> {
+                rememberBounds()
+                shizuku.resizeTask(
+                    task.taskId,
+                    0,
+                    0,
+                    width / 2,
+                    usableBottom
+                )
+                shizuku.focusTask(task.taskId)
+            }
+
+            DesktopTaskAction.SNAP_RIGHT -> {
+                rememberBounds()
+                shizuku.resizeTask(
+                    task.taskId,
+                    width / 2,
+                    0,
+                    width,
+                    usableBottom
+                )
+                shizuku.focusTask(task.taskId)
+            }
+
+            DesktopTaskAction.CLOSE -> {
+                shizuku.closeTask(task.taskId)
+                handler.postDelayed({ refreshRunningTasks() }, 250)
+            }
+        }
     }
 
     private fun rememberRecent(app: AppEntry) {
@@ -120,6 +251,9 @@ class DesktopActivity : Activity() {
             .putString("recent_packages", recentPackages.joinToString("|"))
             .apply()
     }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 
     @Suppress("DEPRECATION")
     private fun launchPackageOnThisDisplay(packageName: String) {
@@ -142,7 +276,7 @@ class DesktopActivity : Activity() {
                     metrics.widthPixels / 12,
                     metrics.heightPixels / 10,
                     metrics.widthPixels * 11 / 12,
-                    metrics.heightPixels * 9 / 10
+                    (metrics.heightPixels - dp(92)).coerceAtLeast(metrics.heightPixels * 3 / 4)
                 )
             }
         }
@@ -158,5 +292,13 @@ class DesktopActivity : Activity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(taskRefresh)
+        if (::shizuku.isInitialized) {
+            shizuku.close()
+        }
+        super.onDestroy()
     }
 }
