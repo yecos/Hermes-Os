@@ -4,6 +4,7 @@ import android.app.Presentation
 import android.content.Context
 import android.os.Bundle
 import android.view.Display
+import android.view.KeyEvent
 import android.view.Window
 import android.view.WindowManager
 
@@ -13,6 +14,8 @@ class DesktopPresentation(
     private val shellFactory: (Context) -> DesktopShellView
 ) : Presentation(outerContext, display) {
 
+    private var shell: DesktopShellView? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -20,6 +23,17 @@ class DesktopPresentation(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
-        setContentView(shellFactory(context))
+        shell = shellFactory(context)
+        setContentView(shell)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (shell?.handleExternalKey(event) == true) return true
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun onStop() {
+        shell = null
+        super.onStop()
     }
 }
