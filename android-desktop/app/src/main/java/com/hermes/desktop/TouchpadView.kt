@@ -57,7 +57,6 @@ class TouchpadView(
         textSize = dp(9f)
         typeface = Typeface.DEFAULT_BOLD
         textAlign = Paint.Align.CENTER
-        letterSpacing = 0.12f
     }
     private val finger = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(175, 225, 247, 255)
