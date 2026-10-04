@@ -20,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 class MainActivity : Activity(), DisplayManager.DisplayListener {
 
@@ -34,6 +35,9 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     private var mode = DesktopMode.DESKTOP
     private var searchQuery = ""
     private var shellVisible = true
+    private var pointerProfile = "balanced"
+    private val recentPackages = mutableListOf<String>()
+    private val prefs by lazy { getSharedPreferences("hermes_desktop", MODE_PRIVATE) }
 
     private var displayWidth = 1920
     private var displayHeight = 1080
@@ -56,6 +60,13 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
 
         displayManager = getSystemService(DisplayManager::class.java)
         apps = AppRepository(this).launcherApps()
+        pointerProfile = prefs.getString("pointer_profile", "balanced") ?: "balanced"
+        recentPackages.clear()
+        recentPackages += prefs.getString("recent_packages", "")
+            .orEmpty()
+            .split("|")
+            .filter { it.isNotBlank() }
+            .take(5)
         shizuku = ShizukuBridge(this) {
             runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
@@ -153,6 +164,9 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             context = displayContext,
             apps = apps,
             initialMode = mode,
+            initialRecents = recentPackages.mapNotNull { pkg ->
+                apps.firstOrNull { it.packageName == pkg }
+            },
             onLaunchApp = { launchApp(it, displayId) },
             onOpenTermux = { launchPackage("com.termux", displayId) },
             onStartHermes = { TermuxBridge.startHermes(this) }
@@ -206,6 +220,13 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             dp(50)
         ).apply {
             topMargin = dp(8)
+        })
+
+        root.addView(pointerProfileRow(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(44)
+        ).apply {
+            topMargin = dp(7)
         })
 
         if (externalDisplayId != null) {
@@ -349,6 +370,31 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         })
 
         return root
+    }
+
+    private fun pointerProfileRow(): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(Color.argb(70, 17, 23, 34), dp(14), border, 1)
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+
+            addView(segmentButton("Precisión", pointerProfile == "precision") {
+                setPointerProfile("precision")
+            }, rowWeight())
+            addView(segmentButton("Equilibrado", pointerProfile == "balanced") {
+                setPointerProfile("balanced")
+            }, rowWeight())
+            addView(segmentButton("Rápido", pointerProfile == "fast") {
+                setPointerProfile("fast")
+            }, rowWeight())
+        }
+
+    private fun setPointerProfile(profile: String) {
+        if (pointerProfile == profile) return
+        pointerProfile = profile
+        prefs.edit().putString("pointer_profile", profile).apply()
+        setContentView(phoneController())
     }
 
     private fun controllerHeader(): View =
@@ -550,8 +596,18 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             return
         }
 
-        cursorX = (cursorX + dx).coerceIn(1f, displayWidth.toFloat() - 2f)
-        cursorY = (cursorY + dy).coerceIn(1f, displayHeight.toFloat() - 2f)
+        val magnitude = sqrt(dx * dx + dy * dy)
+        val base = when (pointerProfile) {
+            "precision" -> 0.82f
+            "fast" -> 1.72f
+            else -> 1.18f
+        }
+        val acceleration = 1f + (magnitude / 24f).coerceIn(0f, 1.2f) * 0.65f
+        val dragDamping = if (dragging) 0.78f else 1f
+        val gain = base * acceleration * dragDamping
+
+        cursorX = (cursorX + dx * gain).coerceIn(1f, displayWidth.toFloat() - 2f)
+        cursorY = (cursorY + dy * gain).coerceIn(1f, displayHeight.toFloat() - 2f)
         shizuku.movePointer(id, cursorX, cursorY, dragging)
     }
 
@@ -583,8 +639,17 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         else setContentView(phoneController())
     }
 
-    private fun launchApp(app: AppEntry, displayId: Int) =
+    private fun launchApp(app: AppEntry, displayId: Int) {
+        rememberRecent(app)
         launchPackage(app.packageName, displayId)
+    }
+
+    private fun rememberRecent(app: AppEntry) {
+        recentPackages.remove(app.packageName)
+        recentPackages.add(0, app.packageName)
+        while (recentPackages.size > 5) recentPackages.removeAt(recentPackages.lastIndex)
+        prefs.edit().putString("recent_packages", recentPackages.joinToString("|")).apply()
+    }
 
     private fun hideDesktopShell() {
         shellVisible = false
