@@ -10,7 +10,7 @@ import android.view.WindowManager
 class DesktopPresentation(
     outerContext: Context,
     display: Display,
-    private val shellFactory: () -> DesktopShellView
+    private val shellFactory: (Context) -> DesktopShellView
 ) : Presentation(outerContext, display) {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,6 +20,6 @@ class DesktopPresentation(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
-        setContentView(shellFactory())
+        setContentView(shellFactory(context))
     }
 }
