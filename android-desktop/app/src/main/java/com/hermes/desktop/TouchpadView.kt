@@ -224,7 +224,7 @@ class TouchpadView(
 
                 if (abs(dx) + abs(dy) > dp(2.5f)) {
                     if (!dragging) handler.removeCallbacks(longPress)
-                    onMove(dx * 1.72f, dy * 1.72f, dragging)
+                    onMove(dx, dy, dragging)
                     lastX = event.x
                     lastY = event.y
                     moved = true
