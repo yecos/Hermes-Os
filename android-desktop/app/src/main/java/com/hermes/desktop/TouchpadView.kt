@@ -23,24 +23,44 @@ class TouchpadView(
 ) : View(context) {
 
     private val handler = Handler(Looper.getMainLooper())
-    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(20, 27, 40)
+
+    private val panel = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(15, 21, 32)
     }
-    private val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(72, 89, 118)
+    private val inner = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(70, 255, 255, 255)
         style = Paint.Style.STROKE
-        strokeWidth = dp(1.5f)
+        strokeWidth = dp(1f)
     }
-    private val title = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        textSize = dp(17f)
+    private val accent = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(104, 213, 255)
+    }
+    private val accentSoft = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(40, 104, 213, 255)
+    }
+    private val primary = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(241, 245, 251)
+        textSize = dp(16f)
         typeface = Typeface.DEFAULT_BOLD
         textAlign = Paint.Align.CENTER
     }
-    private val helper = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(157, 170, 194)
-        textSize = dp(12f)
+    private val secondary = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(142, 158, 184)
+        textSize = dp(11.5f)
         textAlign = Paint.Align.CENTER
+    }
+    private val chip = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(42, 104, 213, 255)
+    }
+    private val chipText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(132, 222, 255)
+        textSize = dp(9f)
+        typeface = Typeface.DEFAULT_BOLD
+        textAlign = Paint.Align.CENTER
+        letterSpacing = 0.12f
+    }
+    private val finger = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(175, 225, 247, 255)
     }
 
     private var downX = 0f
@@ -51,49 +71,113 @@ class TouchpadView(
     private var moved = false
     private var dragging = false
     private var twoFinger = false
+    private var touching = false
 
     private val longPress = Runnable {
         if (!moved && !twoFinger && privileged()) {
             dragging = true
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             onDragStart()
+            invalidate()
         }
     }
 
     init {
         isClickable = true
         isFocusable = true
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val radius = dp(22f)
-        canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, bg)
+
+        val radius = dp(28f)
+        canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, panel)
         canvas.drawRoundRect(
-            dp(1f),
-            dp(1f),
+            dp(1f), dp(1f),
             width.toFloat() - dp(1f),
             height.toFloat() - dp(1f),
-            radius,
-            radius,
-            border
+            radius, radius, inner
+        )
+
+        if (privileged()) {
+            canvas.drawCircle(width * .5f, height * .42f, width * .18f, accentSoft)
+        }
+
+        val chipWidth = dp(92f)
+        val chipHeight = dp(26f)
+        val chipLeft = width / 2f - chipWidth / 2f
+        val chipTop = dp(20f)
+        canvas.drawRoundRect(
+            chipLeft, chipTop,
+            chipLeft + chipWidth, chipTop + chipHeight,
+            dp(13f), dp(13f), chip
+        )
+        canvas.drawCircle(chipLeft + dp(14f), chipTop + chipHeight / 2f, dp(3.5f), accent)
+        canvas.drawText(
+            if (privileged()) "MOUSE LIVE" else "LAUNCHER",
+            width / 2f + dp(7f),
+            chipTop + dp(17.5f),
+            chipText
         )
 
         canvas.drawText(
-            if (privileged()) "TOUCHPAD · MOUSE REAL" else "TOUCHPAD · LAUNCHER",
+            when {
+                dragging -> "Arrastrando"
+                twoFinger -> "Scroll"
+                touching -> "Controlando"
+                else -> "Touchpad"
+            },
             width / 2f,
-            height / 2f - dp(9f),
-            title
+            height / 2f - dp(8f),
+            primary
         )
+
         canvas.drawText(
             if (privileged())
-                "1 dedo: mouse · 2 dedos: scroll · mantener: arrastrar"
+                "1 dedo mueve · tap clic · 2 dedos scroll · mantener arrastra"
             else
-                "desliza para navegar · toca para abrir",
+                "Desliza para navegar · toca para abrir",
             width / 2f,
-            height / 2f + dp(18f),
-            helper
+            height / 2f + dp(20f),
+            secondary
         )
+
+        if (touching && !twoFinger) {
+            finger.setShadowLayer(dp(14f), 0f, 0f, Color.argb(160, 104, 213, 255))
+            canvas.drawCircle(lastX, lastY, if (dragging) dp(9f) else dp(6f), finger)
+            finger.clearShadowLayer()
+        }
+
+        val gestureY = height - dp(34f)
+        drawGestureHint(canvas, width * .25f, gestureY, "TAP", "clic")
+        drawGestureHint(canvas, width * .50f, gestureY, "2F", "scroll")
+        drawGestureHint(canvas, width * .75f, gestureY, "HOLD", "drag")
+    }
+
+    private fun drawGestureHint(canvas: Canvas, x: Float, y: Float, key: String, label: String) {
+        val badge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(28, 255, 255, 255)
+        }
+        val keyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(180, 193, 214)
+            textSize = dp(8f)
+            typeface = Typeface.DEFAULT_BOLD
+            textAlign = Paint.Align.CENTER
+        }
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(108, 122, 145)
+            textSize = dp(8f)
+            textAlign = Paint.Align.CENTER
+        }
+
+        canvas.drawRoundRect(
+            x - dp(22f), y - dp(11f),
+            x + dp(22f), y + dp(7f),
+            dp(9f), dp(9f), badge
+        )
+        canvas.drawText(key, x, y + dp(2f), keyPaint)
+        canvas.drawText(label, x, y + dp(20f), labelPaint)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -107,15 +191,20 @@ class TouchpadView(
                 moved = false
                 dragging = false
                 twoFinger = false
+                touching = true
                 handler.postDelayed(longPress, 430)
+                invalidate()
                 return true
             }
 
             MotionEvent.ACTION_POINTER_DOWN -> {
                 twoFinger = true
+                touching = true
                 handler.removeCallbacks(longPress)
                 lastX = event.x
                 lastY = event.y
+                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                invalidate()
                 return true
             }
 
@@ -125,20 +214,22 @@ class TouchpadView(
 
                 if (event.pointerCount >= 2 || twoFinger) {
                     twoFinger = true
-                    if (abs(dy) > dp(5f)) {
+                    if (abs(dy) > dp(4f)) {
                         onScroll(dy)
                         lastY = event.y
                         moved = true
+                        invalidate()
                     }
                     return true
                 }
 
-                if (abs(dx) + abs(dy) > dp(3f)) {
+                if (abs(dx) + abs(dy) > dp(2.5f)) {
                     if (!dragging) handler.removeCallbacks(longPress)
-                    onMove(dx * 1.65f, dy * 1.65f, dragging)
+                    onMove(dx * 1.72f, dy * 1.72f, dragging)
                     lastX = event.x
                     lastY = event.y
                     moved = true
+                    invalidate()
                 }
                 return true
             }
@@ -147,6 +238,7 @@ class TouchpadView(
                 twoFinger = event.pointerCount - 1 >= 2
                 lastX = event.x
                 lastY = event.y
+                invalidate()
                 return true
             }
 
@@ -166,7 +258,9 @@ class TouchpadView(
                     }
                 }
 
+                touching = false
                 twoFinger = false
+                invalidate()
                 return true
             }
         }
