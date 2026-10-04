@@ -19,10 +19,19 @@ class DesktopPresentation(
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
+        window?.clearFlags(
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        )
         window?.setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
+        window?.decorView?.apply {
+            isFocusable = true
+            isFocusableInTouchMode = true
+            requestFocus()
+        }
         val createdShell = shellFactory(context)
         shell = createdShell
         setContentView(createdShell)
