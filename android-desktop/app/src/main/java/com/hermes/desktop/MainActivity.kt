@@ -129,8 +129,8 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         externalDisplayId = target.displayId
         externalDisplayName = target.name
 
-        presentation = DesktopPresentation(this, target) {
-            desktopShell(target.displayId)
+        presentation = DesktopPresentation(this, target) { displayContext ->
+            desktopShell(target.displayId, displayContext)
         }.also {
             runCatching { it.show() }
                 .onFailure { error ->
@@ -145,9 +145,9 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         setContentView(phoneController())
     }
 
-    private fun desktopShell(displayId: Int): DesktopShellView =
+    private fun desktopShell(displayId: Int, displayContext: android.content.Context): DesktopShellView =
         DesktopShellView(
-            context = this,
+            context = displayContext,
             apps = apps,
             initialMode = mode,
             onLaunchApp = { launchApp(it, displayId) },
