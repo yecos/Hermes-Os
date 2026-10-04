@@ -391,6 +391,161 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         return root
     }
 
+    private fun dexTrackpadController(): View {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(bgTop, Color.rgb(9, 14, 23), bgBottom)
+            )
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(6), dp(8), dp(6))
+            background = rounded(surface, dp(20), border, 1)
+
+            addView(TextView(this@MainActivity).apply {
+                text = "H"
+                gravity = Gravity.CENTER
+                textSize = 18f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(bgTop)
+                background = rounded(accent, dp(14), null, 0)
+            }, LinearLayout.LayoutParams(dp(42), dp(42)))
+
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(11), 0, 0, 0)
+                addView(TextView(this@MainActivity).apply {
+                    text = "Hermes Trackpad"
+                    setTextColor(textPrimary)
+                    textSize = 15f
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                })
+                addView(TextView(this@MainActivity).apply {
+                    text = (externalDisplayName ?: "Pantalla") + "  •  mouse de sistema"
+                    setTextColor(textSecondary)
+                    textSize = 9.5f
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+
+            addView(TextView(this@MainActivity).apply {
+                text = if (shizuku.isReady) "SYSTEM" else "SETUP"
+                setTextColor(if (shizuku.isReady) success else textSecondary)
+                textSize = 8.5f
+                letterSpacing = 0.10f
+                gravity = Gravity.CENTER
+                background = rounded(
+                    if (shizuku.isReady) Color.argb(38, 112, 226, 154) else surfaceSoft,
+                    dp(11),
+                    if (shizuku.isReady) Color.argb(70, 112, 226, 154) else border,
+                    1
+                )
+            }, LinearLayout.LayoutParams(dp(62), dp(30)))
+
+            addView(TextView(this@MainActivity).apply {
+                text = "Panel"
+                setTextColor(textSecondary)
+                textSize = 9f
+                gravity = Gravity.CENTER
+                isClickable = true
+                isFocusable = true
+                background = rounded(surfaceSoft, dp(11), border, 1)
+                setOnClickListener {
+                    trackpadFocused = false
+                    setContentView(phoneController())
+                }
+            }, LinearLayout.LayoutParams(dp(62), dp(30)).apply {
+                marginStart = dp(6)
+            })
+        }
+        root.addView(header, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(62)
+        ))
+
+        root.addView(pointerProfileRow(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(42)
+        ).apply {
+            topMargin = dp(7)
+        })
+
+        root.addView(
+            TouchpadView(
+                this,
+                onMove = { dx, dy, dragging -> handlePointerMove(dx, dy, dragging) },
+                onTap = {
+                    if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                        shizuku.virtualMouseClick(1)
+                    } else {
+                        shellView?.activateSelection()
+                    }
+                },
+                onSecondaryTap = {
+                    if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                        shizuku.virtualMouseClick(2)
+                    }
+                },
+                onScroll = { dy ->
+                    if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                        shizuku.virtualMouseScroll(if (dy > 0) -1 else 1)
+                    } else {
+                        shellView?.navigate(0, if (dy > 0) 1 else -1)
+                    }
+                },
+                onDragStart = {
+                    if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                        shizuku.virtualMouseButton(1, true)
+                    }
+                },
+                onDragEnd = {
+                    if (shizuku.isReady) shizuku.virtualMouseButton(1, false)
+                },
+                privileged = { shizuku.isReady }
+            ),
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            ).apply {
+                topMargin = dp(8)
+                bottomMargin = dp(8)
+            }
+        )
+
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        nav.addView(actionButton("←", "Atrás") {
+            navigationAction(KeyEvent.KEYCODE_BACK)
+        }, rowWeight())
+        nav.addView(actionButton("●", "Inicio") {
+            showDesktopHome()
+        }, rowWeight())
+        nav.addView(actionButton("▣", "Recientes") {
+            val id = externalDisplayId
+            val sent = id != null && shizuku.isReady &&
+                shizuku.key(id, KeyEvent.KEYCODE_APP_SWITCH)
+            if (!sent) shellView?.cycleRecent()
+        }, rowWeight())
+        nav.addView(actionButton("⌨", "Panel") {
+            trackpadFocused = false
+            setContentView(phoneController())
+        }, rowWeight())
+        root.addView(nav, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(62)
+        ))
+
+        return root
+    }
+
     private fun pointerProfileRow(): View =
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
