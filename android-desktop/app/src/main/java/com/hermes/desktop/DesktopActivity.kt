@@ -121,7 +121,6 @@ class DesktopActivity : Activity() {
                 TermuxBridge.startHermes(this)
             },
             onShowDesktop = {
-                runCatching { shizuku.focusTask(taskId) }
                 shellView.requestFocus()
             },
             onTaskAction = { task, action ->
@@ -183,7 +182,6 @@ class DesktopActivity : Activity() {
             }
 
             DesktopTaskAction.MINIMIZE -> {
-                shizuku.focusTask(taskId)
                 shellView.requestFocus()
             }
 
