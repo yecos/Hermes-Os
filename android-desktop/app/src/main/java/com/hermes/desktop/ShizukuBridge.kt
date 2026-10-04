@@ -196,6 +196,23 @@ class ShizukuBridge(
     fun stopVirtualMouse(): Boolean =
         runCatching { service?.stopVirtualMouse() == true }.getOrDefault(false)
 
+    fun listTasks(displayId: Int): String =
+        runCatching { service?.listTasks(displayId).orEmpty() }.getOrDefault("")
+
+    fun focusTask(taskId: Int): Boolean =
+        runCatching { service?.focusTask(taskId) == true }.getOrDefault(false)
+
+    fun closeTask(taskId: Int): Boolean =
+        runCatching { service?.closeTask(taskId) == true }.getOrDefault(false)
+
+    fun resizeTask(taskId: Int, left: Int, top: Int, right: Int, bottom: Int): Boolean =
+        runCatching {
+            service?.resizeTask(taskId, left, top, right, bottom) == true
+        }.getOrDefault(false)
+
+    fun setTaskResizable(taskId: Int, mode: Int = 2): Boolean =
+        runCatching { service?.setTaskResizable(taskId, mode) == true }.getOrDefault(false)
+
     fun close() {
         Shizuku.removeBinderReceivedListener(binderReceivedListener)
         Shizuku.removeBinderDeadListener(binderDeadListener)
