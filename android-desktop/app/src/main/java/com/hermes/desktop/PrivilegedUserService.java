@@ -175,9 +175,19 @@ public class PrivilegedUserService extends IPrivilegedBridge.Stub {
     private boolean shellOk(String... command) {
         java.lang.Process process = null;
         try {
-            process = new ProcessBuilder(command)
-                    .redirectErrorStream(true)
-                    .start();
+            ProcessBuilder builder = new ProcessBuilder(command)
+                    .redirectErrorStream(true);
+
+            String inheritedPath = builder.environment().get("PATH");
+            String androidPath = "/system/bin:/system/xbin:/vendor/bin:/product/bin";
+            builder.environment().put(
+                    "PATH",
+                    inheritedPath == null || inheritedPath.isEmpty()
+                            ? androidPath
+                            : androidPath + ":" + inheritedPath
+            );
+
+            process = builder.start();
 
             if (!process.waitFor(3, TimeUnit.SECONDS)) {
                 process.destroy();
