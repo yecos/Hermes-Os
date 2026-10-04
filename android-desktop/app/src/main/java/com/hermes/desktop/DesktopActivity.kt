@@ -11,6 +11,8 @@ import android.os.Looper
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.widget.Toast
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 class DesktopActivity : Activity() {
 
@@ -22,6 +24,8 @@ class DesktopActivity : Activity() {
     private lateinit var apps: List<AppEntry>
     private lateinit var shizuku: ShizukuBridge
     private val handler = Handler(Looper.getMainLooper())
+    private val taskWorker = Executors.newSingleThreadExecutor()
+    private val taskRefreshInFlight = AtomicBoolean(false)
     private val restoreBounds = mutableMapOf<Int, Rect>()
     private val prefs by lazy { getSharedPreferences("hermes_desktop", MODE_PRIVATE) }
 
@@ -69,7 +73,14 @@ class DesktopActivity : Activity() {
         super.onResume()
         if (::shellView.isInitialized) {
             shellView.requestFocus()
+            handler.removeCallbacks(taskRefresh)
+            handler.post(taskRefresh)
         }
+    }
+
+    override fun onPause() {
+        handler.removeCallbacks(taskRefresh)
+        super.onPause()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -139,16 +150,31 @@ class DesktopActivity : Activity() {
         if (!::shellView.isInitialized || !::shizuku.isInitialized || !shizuku.isReady) {
             return
         }
+        if (!taskRefreshInFlight.compareAndSet(false, true)) return
 
+        @Suppress("DEPRECATION")
         val displayId = windowManager.defaultDisplay.displayId
-        val raw = shizuku.listTasks(displayId)
-        if (raw.isBlank()) return
 
-        val tasks = DesktopTaskParser.parse(raw, displayId)
-            .filter { it.packageName != packageName }
-            .filter { !it.packageName.startsWith("com.samsung.android.desktop") }
+        taskWorker.execute {
+            val tasks = runCatching {
+                val raw = shizuku.listTasks(displayId)
+                if (raw.isBlank()) {
+                    emptyList()
+                } else {
+                    DesktopTaskParser.parse(raw, displayId)
+                        .filter { it.packageName != packageName }
+                        .filter { it.packageName != "com.android.systemui" }
+                        .filter { !it.packageName.startsWith("com.samsung.android.desktop") }
+                }
+            }.getOrDefault(emptyList())
 
-        shellView.updateRunningTasks(tasks)
+            handler.post {
+                taskRefreshInFlight.set(false)
+                if (!isFinishing && !isDestroyed && ::shellView.isInitialized) {
+                    shellView.updateRunningTasks(tasks)
+                }
+            }
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -182,6 +208,10 @@ class DesktopActivity : Activity() {
             }
 
             DesktopTaskAction.MINIMIZE -> {
+                // Android 12 / Samsung has no public minimize primitive available to us here.
+                // Until the privileged backend proves a real moveTaskToBack path, bring the
+                // Hermes desktop task forward so the target window is genuinely hidden behind it.
+                shizuku.focusTask(this@DesktopActivity.taskId)
                 shellView.requestFocus()
             }
 
@@ -294,6 +324,7 @@ class DesktopActivity : Activity() {
 
     override fun onDestroy() {
         handler.removeCallbacks(taskRefresh)
+        taskWorker.shutdownNow()
         if (::shizuku.isInitialized) {
             shizuku.close()
         }
