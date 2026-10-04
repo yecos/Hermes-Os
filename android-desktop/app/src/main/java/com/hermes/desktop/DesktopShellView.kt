@@ -122,8 +122,8 @@ class DesktopShellView(
         super.onDetachedFromWindow()
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
+    fun handleExternalKey(event: KeyEvent): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN) return false
 
         if (event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_K) {
             paletteActive = true
@@ -181,9 +181,12 @@ class DesktopShellView(
             KeyEvent.KEYCODE_DPAD_CENTER,
             KeyEvent.KEYCODE_ENTER,
             KeyEvent.KEYCODE_NUMPAD_ENTER -> { activateSelection(); true }
-            else -> super.dispatchKeyEvent(event)
+            else -> false
         }
     }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        handleExternalKey(event) || super.dispatchKeyEvent(event)
 
     fun navigate(dx: Int, dy: Int) {
         if (filteredApps.isEmpty()) return
