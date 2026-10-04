@@ -1,7 +1,9 @@
 package com.hermes.desktop
 
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.ConnectivityManager
@@ -12,7 +14,8 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
-import android.widget.Button
+import android.view.animation.DecelerateInterpolator
+import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -29,11 +32,13 @@ class DesktopShellView(
     private val onLaunchApp: (AppEntry) -> Unit,
     private val onOpenTermux: () -> Unit,
     private val onStartHermes: () -> Unit
-) : LinearLayout(context) {
+) : FrameLayout(context) {
 
     private val handler = Handler(Looper.getMainLooper())
     private val clock = TextView(context)
     private val status = TextView(context)
+    private val commandText = TextView(context)
+    private val appCount = TextView(context)
     private val grid = GridLayout(context)
     private val scroll = ScrollView(context)
     private val recentRow = LinearLayout(context)
@@ -44,6 +49,16 @@ class DesktopShellView(
     private val appTiles = mutableListOf<View>()
     private val recents = mutableListOf<AppEntry>()
 
+    private val bgTop = Color.rgb(7, 12, 22)
+    private val bgBottom = Color.rgb(13, 20, 34)
+    private val surface = Color.argb(150, 24, 32, 48)
+    private val surfaceSoft = Color.argb(82, 255, 255, 255)
+    private val border = Color.argb(58, 255, 255, 255)
+    private val textPrimary = Color.rgb(244, 247, 252)
+    private val textSecondary = Color.rgb(155, 168, 191)
+    private val accent = Color.rgb(104, 213, 255)
+    private val accentSoft = Color.argb(64, 104, 213, 255)
+
     private val clockTick = object : Runnable {
         override fun run() {
             clock.text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
@@ -53,17 +68,44 @@ class DesktopShellView(
     }
 
     init {
-        orientation = VERTICAL
         isFocusableInTouchMode = true
-        setPadding(dp(18), dp(14), dp(18), dp(12))
         background = GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            intArrayOf(Color.rgb(12, 18, 30), Color.rgb(22, 30, 47), Color.rgb(8, 12, 20))
+            intArrayOf(bgTop, Color.rgb(11, 17, 31), bgBottom)
         )
 
-        addView(topBar(), LayoutParams(LayoutParams.MATCH_PARENT, dp(58)))
-        addView(appArea(), LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
-        addView(taskbar(), LayoutParams(LayoutParams.MATCH_PARENT, dp(72)))
+        addView(AmbientView(context), LayoutParams(
+            LayoutParams.MATCH_PARENT,
+            LayoutParams.MATCH_PARENT
+        ))
+
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(18), dp(24), dp(18))
+        }
+
+        root.addView(topBar(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(70)
+        ))
+        root.addView(workspaceHeader(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(66)
+        ))
+        root.addView(appArea(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            0,
+            1f
+        ))
+        root.addView(bottomDock(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(84)
+        ))
+
+        addView(root, LayoutParams(
+            LayoutParams.MATCH_PARENT,
+            LayoutParams.MATCH_PARENT
+        ))
 
         renderApps()
         renderRecents()
@@ -105,8 +147,7 @@ class DesktopShellView(
     }
 
     fun activateSelection() {
-        val app = filteredApps.getOrNull(selectedIndex) ?: return
-        launch(app)
+        filteredApps.getOrNull(selectedIndex)?.let { launch(it) }
     }
 
     fun setSearchQuery(query: String) {
@@ -118,6 +159,7 @@ class DesktopShellView(
                     it.packageName.contains(query, ignoreCase = true)
             }
         }
+        commandText.text = if (query.isBlank()) "Buscar apps, comandos y espacios" else query
         selectedIndex = 0
         renderApps()
     }
@@ -130,35 +172,144 @@ class DesktopShellView(
     }
 
     fun cycleRecent() {
-        val app = recents.firstOrNull() ?: return
-        launch(app)
+        recents.firstOrNull()?.let { launch(it) }
     }
 
     private fun topBar(): View =
         LinearLayout(context).apply {
-            orientation = HORIZONTAL
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(12), 0)
+
+            val brand = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+
+                addView(TextView(context).apply {
+                    text = "H"
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.rgb(7, 12, 22))
+                    textSize = 19f
+                    typeface = Typeface.DEFAULT_BOLD
+                    background = rounded(accent, dp(15), null, 0)
+                }, LinearLayout.LayoutParams(dp(44), dp(44)))
+
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(12), 0, 0, 0)
+                    addView(TextView(context).apply {
+                        text = "HERMES"
+                        setTextColor(textPrimary)
+                        textSize = 17f
+                        letterSpacing = 0.12f
+                        typeface = Typeface.DEFAULT_BOLD
+                    })
+                    addView(TextView(context).apply {
+                        text = "DESKTOP"
+                        setTextColor(textSecondary)
+                        textSize = 10f
+                        letterSpacing = 0.18f
+                    })
+                })
+            }
+            addView(brand, LinearLayout.LayoutParams(dp(230), LinearLayout.LayoutParams.MATCH_PARENT))
+
+            val command = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(16), 0, dp(10), 0)
+                background = rounded(Color.argb(120, 18, 25, 39), dp(18), border, 1)
+
+                addView(TextView(context).apply {
+                    text = "⌕"
+                    textSize = 22f
+                    setTextColor(accent)
+                    gravity = Gravity.CENTER
+                }, LinearLayout.LayoutParams(dp(34), LinearLayout.LayoutParams.MATCH_PARENT))
+
+                commandText.apply {
+                    text = "Buscar apps, comandos y espacios"
+                    setTextColor(textSecondary)
+                    textSize = 13f
+                    gravity = Gravity.CENTER_VERTICAL
+                    maxLines = 1
+                }
+                addView(commandText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+
+                addView(TextView(context).apply {
+                    text = "CTRL  K"
+                    setTextColor(Color.rgb(180, 192, 212))
+                    textSize = 9f
+                    gravity = Gravity.CENTER
+                    background = rounded(Color.argb(90, 255, 255, 255), dp(9), null, 0)
+                }, LinearLayout.LayoutParams(dp(62), dp(28)))
+            }
+            addView(command, LinearLayout.LayoutParams(0, dp(48), 1f))
+
+            val system = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL or Gravity.END
+                setPadding(dp(16), 0, 0, 0)
+
+                status.apply {
+                    setTextColor(textSecondary)
+                    textSize = 11f
+                    gravity = Gravity.CENTER
+                    background = rounded(Color.argb(75, 255, 255, 255), dp(13), border, 1)
+                    setPadding(dp(12), 0, dp(12), 0)
+                }
+                addView(status, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(34)))
+
+                clock.apply {
+                    setTextColor(textPrimary)
+                    textSize = 17f
+                    typeface = Typeface.DEFAULT_BOLD
+                    gravity = Gravity.CENTER
+                }
+                addView(clock, LinearLayout.LayoutParams(dp(76), dp(42)))
+            }
+            addView(system, LinearLayout.LayoutParams(dp(260), LinearLayout.LayoutParams.MATCH_PARENT))
+        }
+
+    private fun workspaceHeader(): View =
+        LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(8), dp(4), 0)
+
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(context).apply {
+                    text = if (mode == DesktopMode.TV) "Sala" else "Workspace"
+                    setTextColor(textPrimary)
+                    textSize = 24f
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+                appCount.apply {
+                    setTextColor(textSecondary)
+                    textSize = 11f
+                }
+                addView(appCount)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
             addView(TextView(context).apply {
-                text = "HERMES DESKTOP"
-                setTextColor(Color.WHITE)
-                textSize = 20f
-                typeface = Typeface.DEFAULT_BOLD
-            }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-
-            status.setTextColor(Color.rgb(164, 174, 194))
-            status.textSize = 13f
-            status.gravity = Gravity.END
-            addView(status, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+                text = if (mode == DesktopMode.TV) "TV MODE" else "DESKTOP MODE"
+                setTextColor(accent)
+                textSize = 10f
+                letterSpacing = 0.15f
+                gravity = Gravity.CENTER
+                background = rounded(accentSoft, dp(12), Color.argb(80, 104, 213, 255), 1)
+                setPadding(dp(14), 0, dp(14), 0)
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(34)))
         }
 
     private fun appArea(): View {
-        grid.useDefaultMargins = true
+        grid.useDefaultMargins = false
         grid.alignmentMode = GridLayout.ALIGN_BOUNDS
-        grid.setPadding(dp(8), dp(16), dp(8), dp(24))
+        grid.setPadding(dp(2), dp(10), dp(2), dp(24))
 
         scroll.isFillViewport = true
+        scroll.isVerticalScrollBarEnabled = false
         scroll.addView(grid)
         return scroll
     }
@@ -168,13 +319,15 @@ class DesktopShellView(
         appTiles.clear()
         grid.columnCount = columns()
 
-        filteredApps.take(if (mode == DesktopMode.TV) 30 else 42).forEachIndexed { index, app ->
+        val limit = if (mode == DesktopMode.TV) 30 else 48
+        filteredApps.take(limit).forEachIndexed { index, app ->
             val tile = LinearLayout(context).apply {
-                orientation = VERTICAL
+                orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dp(10), dp(12), dp(10), dp(12))
+                setPadding(dp(12), dp(14), dp(12), dp(10))
                 isClickable = true
                 isFocusable = true
+                elevation = dp(1).toFloat()
                 contentDescription = app.label
                 setOnClickListener {
                     selectedIndex = index
@@ -183,113 +336,175 @@ class DesktopShellView(
                 }
             }
 
-            val iconSize = if (mode == DesktopMode.TV) dp(68) else dp(52)
-            tile.addView(ImageView(context).apply {
-                setImageDrawable(app.icon)
-                scaleType = ImageView.ScaleType.CENTER_INSIDE
-            }, LayoutParams(iconSize, iconSize))
+            val iconSize = if (mode == DesktopMode.TV) dp(76) else dp(58)
+            tile.addView(FrameLayout(context).apply {
+                background = rounded(Color.argb(36, 255, 255, 255), dp(19), border, 1)
+                addView(ImageView(context).apply {
+                    setImageDrawable(app.icon)
+                    scaleType = ImageView.ScaleType.CENTER_INSIDE
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                }, FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                ))
+            }, LinearLayout.LayoutParams(iconSize, iconSize))
 
             tile.addView(TextView(context).apply {
                 text = app.label
-                setTextColor(Color.WHITE)
-                textSize = if (mode == DesktopMode.TV) 15f else 12f
+                setTextColor(textPrimary)
+                textSize = if (mode == DesktopMode.TV) 15f else 12.5f
                 gravity = Gravity.CENTER
                 maxLines = 2
-            }, LayoutParams(
-                if (mode == DesktopMode.TV) dp(180) else dp(130),
-                if (mode == DesktopMode.TV) dp(56) else dp(48)
+                setPadding(0, dp(8), 0, 0)
+            }, LinearLayout.LayoutParams(
+                if (mode == DesktopMode.TV) dp(180) else dp(135),
+                if (mode == DesktopMode.TV) dp(54) else dp(46)
             ))
 
             val lp = GridLayout.LayoutParams().apply {
-                width = if (mode == DesktopMode.TV) dp(200) else dp(145)
-                height = if (mode == DesktopMode.TV) dp(160) else dp(130)
+                width = if (mode == DesktopMode.TV) dp(210) else dp(154)
+                height = if (mode == DesktopMode.TV) dp(170) else dp(132)
+                setMargins(dp(6), dp(6), dp(6), dp(6))
             }
             grid.addView(tile, lp)
             appTiles += tile
         }
+
+        appCount.text = if (filteredApps.isEmpty()) {
+            "Sin resultados"
+        } else {
+            filteredApps.size.toString() + " apps disponibles"
+        }
+
         selectedIndex = selectedIndex.coerceAtMost((appTiles.size - 1).coerceAtLeast(0))
         refreshSelection()
     }
 
     private fun refreshSelection() {
         appTiles.forEachIndexed { index, tile ->
+            val selected = index == selectedIndex
             tile.background = rounded(
-                if (index == selectedIndex)
-                    Color.argb(190, 54, 105, 190)
-                else
-                    Color.argb(90, 255, 255, 255),
-                dp(18),
-                if (index == selectedIndex) Color.rgb(143, 190, 255) else null
+                if (selected) Color.argb(150, 25, 48, 70) else Color.argb(32, 255, 255, 255),
+                dp(21),
+                if (selected) Color.argb(180, 104, 213, 255) else Color.argb(30, 255, 255, 255),
+                if (selected) 2 else 1
             )
+            tile.animate()
+                .scaleX(if (selected) 1.035f else 1f)
+                .scaleY(if (selected) 1.035f else 1f)
+                .translationY(if (selected) -dp(2).toFloat() else 0f)
+                .setDuration(150)
+                .setInterpolator(DecelerateInterpolator())
+                .start()
+            tile.elevation = if (selected) dp(12).toFloat() else dp(1).toFloat()
         }
 
-        val selected = appTiles.getOrNull(selectedIndex) ?: return
-        scroll.post {
-            val target = (selected.top - dp(80)).coerceAtLeast(0)
-            scroll.smoothScrollTo(0, target)
+        appTiles.getOrNull(selectedIndex)?.let { selected ->
+            scroll.post {
+                val target = (selected.top - dp(90)).coerceAtLeast(0)
+                scroll.smoothScrollTo(0, target)
+            }
         }
     }
 
     private fun launch(app: AppEntry) {
         recents.removeAll { it.packageName == app.packageName }
         recents.add(0, app)
-        while (recents.size > 4) recents.removeAt(recents.lastIndex)
+        while (recents.size > 5) recents.removeAt(recents.lastIndex)
         renderRecents()
         onLaunchApp(app)
     }
 
-    private fun taskbar(): View =
+    private fun bottomDock(): View =
+        FrameLayout(context).apply {
+            val dock = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(9), dp(8), dp(9), dp(8))
+                background = rounded(Color.argb(205, 17, 23, 35), dp(24), Color.argb(58, 255, 255, 255), 1)
+
+                addView(dockButton("H", "Hermes", true) { onStartHermes() })
+                addView(dockButton(">_", "Termux", false) { onOpenTermux() })
+
+                recentRow.orientation = LinearLayout.HORIZONTAL
+                recentRow.gravity = Gravity.CENTER_VERTICAL
+                addView(recentRow)
+            }
+
+            addView(dock, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                dp(68),
+                Gravity.CENTER
+            ))
+        }
+
+    private fun dockButton(glyph: String, label: String, highlighted: Boolean, action: () -> Unit): View =
         LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(8), dp(12), dp(8))
-            background = rounded(Color.argb(180, 20, 27, 40), dp(22), null)
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(3), dp(8), dp(3))
+            isClickable = true
+            isFocusable = true
+            background = rounded(
+                if (highlighted) accentSoft else Color.TRANSPARENT,
+                dp(15),
+                null,
+                0
+            )
+            setOnClickListener { action() }
 
-            addView(taskButton("🤖 Hermes") { onStartHermes() })
-            addView(taskButton(">_ Termux") { onOpenTermux() })
+            addView(TextView(context).apply {
+                text = glyph
+                gravity = Gravity.CENTER
+                setTextColor(if (highlighted) accent else textPrimary)
+                textSize = if (glyph == "H") 18f else 15f
+                typeface = Typeface.DEFAULT_BOLD
+            }, LinearLayout.LayoutParams(dp(38), dp(30)))
 
-            recentRow.orientation = HORIZONTAL
-            recentRow.gravity = Gravity.CENTER_VERTICAL
-            addView(recentRow, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
-
-            clock.setTextColor(Color.WHITE)
-            clock.textSize = 17f
-            clock.typeface = Typeface.DEFAULT_BOLD
-            clock.gravity = Gravity.CENTER
-            addView(clock, LayoutParams(dp(85), LayoutParams.MATCH_PARENT))
+            addView(TextView(context).apply {
+                text = label
+                gravity = Gravity.CENTER
+                setTextColor(textSecondary)
+                textSize = 8f
+            })
         }
 
     private fun renderRecents() {
         recentRow.removeAllViews()
         if (recents.isEmpty()) {
             recentRow.addView(TextView(context).apply {
-                text = mode.label + " · " + apps.size + " apps"
-                setTextColor(Color.rgb(160, 170, 190))
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(14), 0, 0, 0)
+                text = "   Abre una app para verla aquí   "
+                setTextColor(Color.rgb(125, 139, 160))
+                textSize = 10f
+                gravity = Gravity.CENTER
             })
             return
         }
 
         recents.forEach { app ->
-            recentRow.addView(Button(context).apply {
-                text = app.label.take(12)
-                isAllCaps = false
-                textSize = 11f
+            recentRow.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(7), dp(2), dp(7), dp(2))
+                isClickable = true
+                isFocusable = true
                 setOnClickListener { launch(app) }
-            }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+
+                addView(ImageView(context).apply {
+                    setImageDrawable(app.icon)
+                    scaleType = ImageView.ScaleType.CENTER_INSIDE
+                }, LinearLayout.LayoutParams(dp(34), dp(34)))
+
+                addView(TextView(context).apply {
+                    text = app.label.take(10)
+                    setTextColor(textSecondary)
+                    textSize = 8f
+                    gravity = Gravity.CENTER
+                    maxLines = 1
+                })
+            })
         }
     }
-
-    private fun taskButton(label: String, action: () -> Unit): Button =
-        Button(context).apply {
-            text = label
-            isAllCaps = false
-            setTextColor(Color.WHITE)
-            textSize = 13f
-            background = rounded(Color.argb(90, 255, 255, 255), dp(14), null)
-            setOnClickListener { action() }
-        }
 
     private fun deviceStatus(): String {
         val battery = context.getSystemService(BatteryManager::class.java)
@@ -306,18 +521,47 @@ class DesktopShellView(
             caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Datos"
             else -> "Online"
         }
-        return network + " · " + battery + "%"
+        return network + "  •  " + battery + "%"
     }
 
-    private fun columns(): Int = if (mode == DesktopMode.TV) 5 else 6
+    private fun columns(): Int = if (mode == DesktopMode.TV) 5 else 7
 
-    private fun rounded(color: Int, radius: Int, strokeColor: Int?): GradientDrawable =
+    private fun rounded(
+        color: Int,
+        radius: Int,
+        strokeColor: Int?,
+        strokeWidth: Int
+    ): GradientDrawable =
         GradientDrawable().apply {
             setColor(color)
             cornerRadius = radius.toFloat()
-            if (strokeColor != null) setStroke(dp(2), strokeColor)
+            if (strokeColor != null && strokeWidth > 0) {
+                setStroke(dp(strokeWidth), strokeColor)
+            }
         }
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
+
+    private inner class AmbientView(context: Context) : View(context) {
+        private val cyan = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(20, 81, 203, 255)
+        }
+        private val violet = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(16, 146, 119, 255)
+        }
+        private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(16, 255, 255, 255)
+            strokeWidth = dp(1).toFloat()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val w = width.toFloat()
+            val h = height.toFloat()
+            canvas.drawCircle(w * .78f, h * .18f, w * .22f, cyan)
+            canvas.drawCircle(w * .12f, h * .78f, w * .20f, violet)
+            canvas.drawLine(w * .05f, h * .12f, w * .95f, h * .12f, line)
+        }
+    }
 }
