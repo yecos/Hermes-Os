@@ -20,6 +20,7 @@ import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.PopupWindow
 import android.widget.ScrollView
 import android.widget.TextView
 import java.text.SimpleDateFormat
@@ -33,7 +34,9 @@ class DesktopShellView(
     initialRecents: List<AppEntry> = emptyList(),
     private val onLaunchApp: (AppEntry) -> Unit,
     private val onOpenTermux: () -> Unit,
-    private val onStartHermes: () -> Unit
+    private val onStartHermes: () -> Unit,
+    private val onShowDesktop: () -> Unit = {},
+    private val onTaskAction: (DesktopTask, DesktopTaskAction) -> Unit = { _, _ -> }
 ) : FrameLayout(context) {
 
     private val handler = Handler(Looper.getMainLooper())
@@ -45,6 +48,9 @@ class DesktopShellView(
     private val scroll = ScrollView(context)
     private val recentRow = LinearLayout(context)
     private lateinit var commandBar: LinearLayout
+    private var runningTasks: List<DesktopTask> = emptyList()
+    private var taskSwitchIndex = -1
+    private var switcherOverlay: LinearLayout? = null
 
     private var mode = initialMode
     private var paletteActive = false
@@ -113,7 +119,7 @@ class DesktopShellView(
         ))
 
         renderApps()
-        renderRecents()
+        renderTaskbarApps()
         handler.post(clockTick)
         post { requestFocus() }
     }
@@ -125,6 +131,11 @@ class DesktopShellView(
 
     fun handleExternalKey(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return false
+
+        if (event.isAltPressed && event.keyCode == KeyEvent.KEYCODE_TAB) {
+            cycleTaskSwitcher()
+            return true
+        }
 
         if ((event.isCtrlPressed && event.keyCode == KeyEvent.KEYCODE_K) ||
             event.keyCode == KeyEvent.KEYCODE_SLASH ||
@@ -243,6 +254,77 @@ class DesktopShellView(
             if (paletteActive) 2 else 1
         )
         commandText.setTextColor(if (paletteActive) textPrimary else textSecondary)
+    }
+
+    fun updateRunningTasks(tasks: List<DesktopTask>) {
+        val normalized = tasks
+            .filter { it.packageName != context.packageName }
+            .distinctBy { it.taskId }
+
+        if (normalized == runningTasks) return
+        runningTasks = normalized
+        taskSwitchIndex = taskSwitchIndex.coerceAtMost(runningTasks.lastIndex)
+        renderTaskbarApps()
+    }
+
+    private fun cycleTaskSwitcher() {
+        if (runningTasks.isEmpty()) return
+        taskSwitchIndex = (taskSwitchIndex + 1).mod(runningTasks.size)
+        val selected = runningTasks[taskSwitchIndex]
+        showTaskSwitcher(selected)
+        onTaskAction(selected, DesktopTaskAction.FOCUS)
+    }
+
+    private fun showTaskSwitcher(selected: DesktopTask) {
+        switcherOverlay?.let { removeView(it) }
+
+        val overlay = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = rounded(Color.argb(238, 14, 21, 33), dp(22), border, 1)
+            elevation = dp(18).toFloat()
+        }
+
+        runningTasks.take(8).forEach { task ->
+            val app = apps.firstOrNull { it.packageName == task.packageName }
+            val selectedTask = task.taskId == selected.taskId
+            overlay.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(10), dp(7), dp(10), dp(7))
+                background = rounded(
+                    if (selectedTask) Color.argb(105, 104, 213, 255) else Color.TRANSPARENT,
+                    dp(14),
+                    if (selectedTask) Color.argb(150, 104, 213, 255) else null,
+                    if (selectedTask) 1 else 0
+                )
+                addView(ImageView(context).apply {
+                    setImageDrawable(app?.icon)
+                    scaleType = ImageView.ScaleType.CENTER_INSIDE
+                }, LinearLayout.LayoutParams(dp(40), dp(40)))
+                addView(TextView(context).apply {
+                    text = (app?.label ?: task.packageName.substringAfterLast('.')).take(12)
+                    setTextColor(if (selectedTask) textPrimary else textSecondary)
+                    textSize = 9f
+                    gravity = Gravity.CENTER
+                    maxLines = 1
+                })
+            }, LinearLayout.LayoutParams(dp(92), dp(68)))
+        }
+
+        switcherOverlay = overlay
+        addView(overlay, LayoutParams(
+            LayoutParams.WRAP_CONTENT,
+            dp(88),
+            Gravity.CENTER
+        ))
+
+        handler.removeCallbacksAndMessages("task-switcher")
+        handler.postAtTime({
+            switcherOverlay?.let { removeView(it) }
+            switcherOverlay = null
+        }, "task-switcher", android.os.SystemClock.uptimeMillis() + 900)
     }
 
     fun setMode(newMode: DesktopMode) {
@@ -521,7 +603,7 @@ class DesktopShellView(
         recents.removeAll { it.packageName == app.packageName }
         recents.add(0, app)
         while (recents.size > 5) recents.removeAt(recents.lastIndex)
-        renderRecents()
+        renderTaskbarApps()
         onLaunchApp(app)
     }
 
@@ -531,10 +613,23 @@ class DesktopShellView(
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(9), dp(8), dp(9), dp(8))
-                background = rounded(Color.argb(205, 17, 23, 35), dp(24), Color.argb(58, 255, 255, 255), 1)
+                background = rounded(
+                    Color.argb(220, 14, 20, 31),
+                    dp(24),
+                    Color.argb(65, 255, 255, 255),
+                    1
+                )
 
-                addView(dockButton("H", "Hermes", true) { onStartHermes() })
+                addView(dockButton("⌂", "Inicio", true) { onShowDesktop() })
+                addView(dockButton("H", "Hermes", false) { onStartHermes() })
                 addView(dockButton(">_", "Termux", false) { onOpenTermux() })
+
+                addView(View(context).apply {
+                    background = rounded(Color.argb(36, 255, 255, 255), 1, null, 0)
+                }, LinearLayout.LayoutParams(dp(1), dp(38)).apply {
+                    marginStart = dp(5)
+                    marginEnd = dp(5)
+                })
 
                 recentRow.orientation = LinearLayout.HORIZONTAL
                 recentRow.gravity = Gravity.CENTER_VERTICAL
@@ -603,8 +698,167 @@ class DesktopShellView(
             })
         }
 
-    private fun renderRecents() {
+    private fun taskButton(task: DesktopTask): View {
+        val app = apps.firstOrNull { it.packageName == task.packageName }
+        val focused = task.focused
+
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(7), dp(3), dp(7), dp(3))
+            isClickable = true
+            isFocusable = true
+            contentDescription = app?.label ?: task.packageName
+
+            background = rounded(
+                if (focused) Color.argb(72, 104, 213, 255) else Color.TRANSPARENT,
+                dp(13),
+                if (focused) Color.argb(110, 104, 213, 255) else null,
+                if (focused) 1 else 0
+            )
+
+            setOnClickListener {
+                onTaskAction(task, DesktopTaskAction.FOCUS)
+            }
+            setOnLongClickListener {
+                showTaskMenu(this, task)
+                true
+            }
+            setOnGenericMotionListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_BUTTON_PRESS &&
+                    event.buttonState and MotionEvent.BUTTON_SECONDARY != 0
+                ) {
+                    showTaskMenu(this, task)
+                    true
+                } else {
+                    false
+                }
+            }
+            setOnHoverListener { _, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_HOVER_ENTER -> {
+                        animate().scaleX(1.07f).scaleY(1.07f).setDuration(90).start()
+                        if (!focused) {
+                            background = rounded(
+                                Color.argb(42, 255, 255, 255),
+                                dp(13),
+                                border,
+                                1
+                            )
+                        }
+                    }
+                    MotionEvent.ACTION_HOVER_EXIT -> {
+                        animate().scaleX(1f).scaleY(1f).setDuration(90).start()
+                        background = rounded(
+                            if (focused) Color.argb(72, 104, 213, 255) else Color.TRANSPARENT,
+                            dp(13),
+                            if (focused) Color.argb(110, 104, 213, 255) else null,
+                            if (focused) 1 else 0
+                        )
+                    }
+                }
+                false
+            }
+
+            addView(ImageView(context).apply {
+                setImageDrawable(app?.icon)
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+            }, LinearLayout.LayoutParams(dp(35), dp(35)))
+
+            addView(TextView(context).apply {
+                text = (app?.label ?: task.packageName.substringAfterLast('.')).take(10)
+                setTextColor(if (focused) textPrimary else textSecondary)
+                textSize = 8f
+                gravity = Gravity.CENTER
+                maxLines = 1
+            })
+
+            addView(View(context).apply {
+                background = rounded(
+                    if (focused) accent else Color.argb(130, 160, 175, 198),
+                    dp(2),
+                    null,
+                    0
+                )
+            }, LinearLayout.LayoutParams(dp(if (focused) 22 else 12), dp(2)).apply {
+                topMargin = dp(2)
+            })
+        }
+    }
+
+    private fun showTaskMenu(anchor: View, task: DesktopTask) {
+        val menu = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(7), dp(7), dp(7), dp(7))
+            background = rounded(
+                Color.argb(248, 15, 22, 34),
+                dp(16),
+                Color.argb(70, 255, 255, 255),
+                1
+            )
+            elevation = dp(18).toFloat()
+        }
+
+        lateinit var popup: PopupWindow
+        fun addAction(glyph: String, label: String, action: DesktopTaskAction, danger: Boolean = false) {
+            menu.addView(TextView(context).apply {
+                text = "$glyph   $label"
+                setTextColor(if (danger) Color.rgb(255, 145, 145) else textPrimary)
+                textSize = 12f
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), 0, dp(12), 0)
+                isClickable = true
+                background = rounded(Color.TRANSPARENT, dp(10), null, 0)
+                setOnHoverListener { _, event ->
+                    background = rounded(
+                        if (event.actionMasked == MotionEvent.ACTION_HOVER_ENTER)
+                            Color.argb(45, 255, 255, 255)
+                        else Color.TRANSPARENT,
+                        dp(10),
+                        null,
+                        0
+                    )
+                    false
+                }
+                setOnClickListener {
+                    popup.dismiss()
+                    onTaskAction(task, action)
+                }
+            }, LinearLayout.LayoutParams(dp(184), dp(39)))
+        }
+
+        addAction("↗", "Traer al frente", DesktopTaskAction.FOCUS)
+        addAction("—", "Minimizar", DesktopTaskAction.MINIMIZE)
+        addAction("▣", "Maximizar", DesktopTaskAction.MAXIMIZE)
+        addAction("□", "Restaurar", DesktopTaskAction.RESTORE)
+        addAction("◧", "Ajustar izquierda", DesktopTaskAction.SNAP_LEFT)
+        addAction("◨", "Ajustar derecha", DesktopTaskAction.SNAP_RIGHT)
+        addAction("×", "Cerrar", DesktopTaskAction.CLOSE, true)
+
+        popup = PopupWindow(
+            menu,
+            dp(198),
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            true
+        ).apply {
+            isOutsideTouchable = true
+            elevation = dp(20).toFloat()
+            setBackgroundDrawable(rounded(Color.TRANSPARENT, dp(16), null, 0))
+        }
+
+        popup.showAsDropDown(anchor, -dp(70), -dp(310))
+    }
+
+    private fun renderTaskbarApps() {
         recentRow.removeAllViews()
+
+        if (runningTasks.isNotEmpty()) {
+            runningTasks.take(9).forEach { task ->
+                recentRow.addView(taskButton(task))
+            }
+            return
+        }
+
         if (recents.isEmpty()) {
             recentRow.addView(TextView(context).apply {
                 text = "   Abre una app para verla aquí   "
