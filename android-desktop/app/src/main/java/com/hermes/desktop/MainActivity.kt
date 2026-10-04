@@ -20,7 +20,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import kotlin.math.abs
-import kotlin.math.sqrt
 
 class MainActivity : Activity(), DisplayManager.DisplayListener {
 
@@ -36,6 +35,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     private var searchQuery = ""
     private var shellVisible = true
     private var pointerProfile = "balanced"
+    private var trackpadFocused = true
     private val recentPackages = mutableListOf<String>()
     private val prefs by lazy { getSharedPreferences("hermes_desktop", MODE_PRIVATE) }
 
@@ -70,6 +70,9 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         shizuku = ShizukuBridge(this) {
             runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
+                    if (::shizuku.isInitialized && shizuku.isReady) {
+                        shizuku.startVirtualMouse()
+                    }
                     setContentView(phoneController())
                 }
             }
@@ -84,6 +87,9 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         super.onResume()
         displayManager.registerDisplayListener(this, null)
         if (shellVisible) attachBestExternalDisplay()
+        if (::shizuku.isInitialized && shizuku.isReady) {
+            shizuku.startVirtualMouse()
+        }
         setContentView(phoneController())
     }
 
@@ -96,6 +102,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         presentation?.dismiss()
         presentation = null
         shellView = null
+        runCatching { shizuku.stopVirtualMouse() }
         shizuku.close()
         super.onDestroy()
     }
@@ -156,6 +163,9 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
                 }
         }
 
+        if (::shizuku.isInitialized && shizuku.isReady) {
+            shizuku.startVirtualMouse()
+        }
         setContentView(phoneController())
     }
 
@@ -176,6 +186,10 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         }
 
     private fun phoneController(): View {
+        if (externalDisplayId != null && trackpadFocused) {
+            return dexTrackpadController()
+        }
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(12))
@@ -235,30 +249,31 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
                     this,
                     onMove = { dx, dy, dragging -> handlePointerMove(dx, dy, dragging) },
                     onTap = {
-                        val id = externalDisplayId
-                        if (id != null && shizuku.isReady) {
-                            shizuku.click(id, cursorX, cursorY)
+                        if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                            shizuku.virtualMouseClick(1)
                         } else {
                             shellView?.activateSelection()
                         }
                     },
+                    onSecondaryTap = {
+                        if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                            shizuku.virtualMouseClick(2)
+                        }
+                    },
                     onScroll = { dy ->
-                        val id = externalDisplayId
-                        if (id != null && shizuku.isReady) {
-                            shizuku.scroll(id, cursorX, cursorY, if (dy > 0) -1f else 1f)
+                        if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                            shizuku.virtualMouseScroll(if (dy > 0) -1 else 1)
                         } else {
                             shellView?.navigate(0, if (dy > 0) 1 else -1)
                         }
                     },
                     onDragStart = {
-                        externalDisplayId?.let {
-                            if (shizuku.isReady) shizuku.pointerButton(it, cursorX, cursorY, true)
+                        if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                            shizuku.virtualMouseButton(1, true)
                         }
                     },
                     onDragEnd = {
-                        externalDisplayId?.let {
-                            if (shizuku.isReady) shizuku.pointerButton(it, cursorX, cursorY, false)
-                        }
+                        if (shizuku.isReady) shizuku.virtualMouseButton(1, false)
                     },
                     privileged = { shizuku.isReady }
                 ),
@@ -348,9 +363,13 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             gravity = Gravity.CENTER
             setPadding(0, dp(5), 0, 0)
         }
+        toolsRow.addView(wideAction("⌁", "Touchpad") {
+            trackpadFocused = true
+            setContentView(phoneController())
+        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(4) })
         toolsRow.addView(wideAction("H", "Hermes") {
             TermuxBridge.startHermes(this)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(4) })
+        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
         toolsRow.addView(wideAction(">_", "Termux") {
             externalDisplayId?.let { launchPackage("com.termux", it) }
                 ?: TermuxBridge.openTermux(this)
@@ -596,19 +615,24 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             return
         }
 
-        val magnitude = sqrt(dx * dx + dy * dy)
-        val base = when (pointerProfile) {
-            "precision" -> 0.82f
-            "fast" -> 1.72f
-            else -> 1.18f
+        // Real uinput mouse: Android owns pointer position and applies the same
+        // pointer acceleration/ballistics used by USB/Bluetooth mice.
+        val scale = when (pointerProfile) {
+            "precision" -> 0.72f
+            "fast" -> 1.35f
+            else -> 1.0f
         }
-        val acceleration = 1f + (magnitude / 24f).coerceIn(0f, 1.2f) * 0.65f
-        val dragDamping = if (dragging) 0.78f else 1f
-        val gain = base * acceleration * dragDamping
 
-        cursorX = (cursorX + dx * gain).coerceIn(1f, displayWidth.toFloat() - 2f)
-        cursorY = (cursorY + dy * gain).coerceIn(1f, displayHeight.toFloat() - 2f)
-        shizuku.movePointer(id, cursorX, cursorY, dragging)
+        val moved = shizuku.startVirtualMouse() &&
+            shizuku.virtualMouseMove(dx * scale, dy * scale)
+
+        // Compatibility fallback for devices where uinput is blocked.
+        if (!moved) {
+            val fallbackScale = if (dragging) scale * 0.8f else scale
+            cursorX = (cursorX + dx * fallbackScale).coerceIn(1f, displayWidth.toFloat() - 2f)
+            cursorY = (cursorY + dy * fallbackScale).coerceIn(1f, displayHeight.toFloat() - 2f)
+            shizuku.movePointer(id, cursorX, cursorY, dragging)
+        }
     }
 
     private fun privilegedCombo(vararg keyCodes: Int) {
