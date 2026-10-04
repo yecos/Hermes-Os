@@ -1,14 +1,13 @@
 package com.hermes.desktop
 
-import android.accessibilityservice.AccessibilityService
 import android.app.Activity
 import android.app.ActivityOptions
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.os.Bundle
-import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Display
@@ -16,7 +15,6 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.InputMethodManager
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -32,6 +30,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     private var presentation: DesktopPresentation? = null
     private var shellView: DesktopShellView? = null
     private var externalDisplayId: Int? = null
+    private var externalDisplayName: String? = null
     private var mode = DesktopMode.DESKTOP
     private var searchQuery = ""
 
@@ -39,6 +38,17 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     private var displayHeight = 1080
     private var cursorX = displayWidth / 2f
     private var cursorY = displayHeight / 2f
+
+    private val bgTop = Color.rgb(7, 11, 19)
+    private val bgBottom = Color.rgb(12, 18, 29)
+    private val surface = Color.argb(150, 24, 31, 45)
+    private val surfaceSoft = Color.argb(65, 255, 255, 255)
+    private val border = Color.argb(52, 255, 255, 255)
+    private val textPrimary = Color.rgb(244, 247, 252)
+    private val textSecondary = Color.rgb(145, 159, 182)
+    private val accent = Color.rgb(104, 213, 255)
+    private val accentSoft = Color.argb(52, 104, 213, 255)
+    private val success = Color.rgb(112, 226, 154)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,8 +63,8 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             }
         }
 
-        window.statusBarColor = Color.BLACK
-        window.navigationBarColor = Color.BLACK
+        window.statusBarColor = bgTop
+        window.navigationBarColor = bgTop
         setContentView(phoneController())
     }
 
@@ -86,6 +96,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             presentation = null
             shellView = null
             externalDisplayId = null
+            externalDisplayName = null
             setContentView(phoneController())
         }
     }
@@ -116,6 +127,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         presentation?.dismiss()
         shellView = null
         externalDisplayId = target.displayId
+        externalDisplayName = target.name
 
         presentation = DesktopPresentation(this, target) {
             desktopShell(target.displayId)
@@ -149,50 +161,34 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     private fun phoneController(): View {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(14), dp(16), dp(14))
-            setBackgroundColor(Color.rgb(8, 12, 20))
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(bgTop, Color.rgb(10, 15, 25), bgBottom)
+            )
         }
 
-        root.addView(TextView(this).apply {
-            text = "HERMES DESKTOP 0.3"
-            setTextColor(Color.WHITE)
-            textSize = 24f
-            gravity = Gravity.CENTER
-        })
+        root.addView(controllerHeader(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(72)
+        ))
 
-        root.addView(TextView(this).apply {
-            text = if (externalDisplayId == null)
-                "Sin pantalla externa · " + shizuku.stateLabel()
-            else
-                "Pantalla #" + externalDisplayId + " · " + mode.label + " · " + shizuku.stateLabel()
-            setTextColor(if (shizuku.isReady) Color.rgb(126, 226, 154) else Color.LTGRAY)
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setPadding(0, dp(6), 0, dp(8))
+        root.addView(modeSwitcher(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(48)
+        ).apply {
+            topMargin = dp(8)
         })
-
-        val modeRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        modeRow.addView(actionButton("🖥 Shell") {
-            setMode(DesktopMode.DESKTOP)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        modeRow.addView(actionButton("📺 TV") {
-            setMode(DesktopMode.TV)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        modeRow.addView(actionButton("⚡ Shizuku") {
-            shizuku.requestOrConnect()
-            setContentView(phoneController())
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        root.addView(modeRow)
 
         val search = EditText(this).apply {
-            hint = "Buscar app…"
+            hint = "Buscar en el escritorio"
             setText(searchQuery)
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
+            setTextColor(textPrimary)
+            setHintTextColor(Color.rgb(102, 116, 139))
             setSingleLine(true)
+            textSize = 14f
+            setPadding(dp(16), 0, dp(16), 0)
+            background = rounded(Color.argb(95, 19, 26, 39), dp(17), border, 1)
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -205,7 +201,9 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         root.addView(search, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             dp(50)
-        ))
+        ).apply {
+            topMargin = dp(8)
+        })
 
         if (externalDisplayId != null) {
             root.addView(
@@ -244,95 +242,298 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     0,
                     1f
-                )
+                ).apply {
+                    topMargin = dp(10)
+                }
             )
         } else {
-            root.addView(TextView(this).apply {
-                text = "El touchpad aparecerá cuando Android exponga una segunda pantalla."
-                setTextColor(Color.GRAY)
-                gravity = Gravity.CENTER
-            }, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            ))
+            root.addView(
+                emptyDisplayCard(),
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f
+                ).apply {
+                    topMargin = dp(10)
+                }
+            )
         }
+
+        root.addView(sectionLabel("VENTANAS"), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(25)
+        ).apply {
+            topMargin = dp(5)
+        })
 
         val windowRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(0, dp(6), 0, 0)
         }
-        windowRow.addView(actionButton("⇄ Alt-Tab") {
+        windowRow.addView(actionButton("⇄", "Cambiar") {
             privilegedCombo(KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_TAB)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        windowRow.addView(actionButton("▣ Ventana") {
+        }, rowWeight())
+        windowRow.addView(actionButton("▣", "Ventana") {
             privilegedCombo(
                 KeyEvent.KEYCODE_META_LEFT,
                 KeyEvent.KEYCODE_CTRL_LEFT,
                 KeyEvent.KEYCODE_DPAD_DOWN
             )
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        windowRow.addView(actionButton("▰ Pantalla") {
+        }, rowWeight())
+        windowRow.addView(actionButton("▰", "Pantalla") {
             privilegedCombo(KeyEvent.KEYCODE_META_LEFT, KeyEvent.KEYCODE_H)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        root.addView(windowRow)
+        }, rowWeight())
+        root.addView(windowRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(58)
+        ))
 
         val navRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            setPadding(0, dp(5), 0, 0)
         }
-        navRow.addView(actionButton("← Atrás") {
-            navigationAction(KeyEvent.KEYCODE_BACK, AccessibilityService.GLOBAL_ACTION_BACK)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        navRow.addView(actionButton("● Inicio") {
-            navigationAction(KeyEvent.KEYCODE_HOME, AccessibilityService.GLOBAL_ACTION_HOME)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        navRow.addView(actionButton("▣ Recientes") {
+        navRow.addView(actionButton("←", "Atrás") {
+            navigationAction(KeyEvent.KEYCODE_BACK)
+        }, rowWeight())
+        navRow.addView(actionButton("●", "Inicio") {
+            navigationAction(KeyEvent.KEYCODE_HOME)
+        }, rowWeight())
+        navRow.addView(actionButton("▣", "Recientes") {
             val id = externalDisplayId
             val sent = id != null && shizuku.isReady &&
                 shizuku.key(id, KeyEvent.KEYCODE_APP_SWITCH)
 
-            if (!sent &&
-                !HermesAccessibilityService.perform(AccessibilityService.GLOBAL_ACTION_RECENTS)
-            ) {
+            if (!sent) {
                 shellView?.cycleRecent()
-                openAccessibilityHelp()
+                showShizukuHint()
             }
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        root.addView(navRow)
+        }, rowWeight())
+        navRow.addView(actionButton("⌨", "Teclado") {
+            search.requestFocus()
+            getSystemService(InputMethodManager::class.java)
+                ?.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT)
+        }, rowWeight())
+        root.addView(navRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(62)
+        ))
 
         val toolsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            setPadding(0, dp(5), 0, 0)
         }
-        toolsRow.addView(actionButton("⌨ Teclado") {
-            search.requestFocus()
-            getSystemService(InputMethodManager::class.java)
-                ?.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        toolsRow.addView(actionButton("🤖 Hermes") {
+        toolsRow.addView(wideAction("H", "Hermes") {
             TermuxBridge.startHermes(this)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        toolsRow.addView(actionButton(">_ Termux") {
+        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(4) })
+        toolsRow.addView(wideAction(">_", "Termux") {
             externalDisplayId?.let { launchPackage("com.termux", it) }
                 ?: TermuxBridge.openTermux(this)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(4) })
         root.addView(toolsRow)
 
         root.addView(TextView(this).apply {
             text = if (shizuku.isReady)
-                "Mouse real activo · 1 dedo mueve · tap clic · 2 dedos scroll · mantener y mover arrastra"
+                "MOUSE LIVE  •  Shizuku activo  •  ${displayWidth}×${displayHeight}"
             else
-                "Sin Shizuku: touchpad del launcher. Activa Shizuku para mouse real."
-            setTextColor(Color.GRAY)
-            textSize = 11f
+                "Activa Shizuku para mouse, clic, scroll y control de ventanas"
+            setTextColor(if (shizuku.isReady) Color.rgb(126, 206, 180) else textSecondary)
+            textSize = 9.5f
+            letterSpacing = 0.06f
             gravity = Gravity.CENTER
-            setPadding(0, dp(7), 0, 0)
+            setPadding(0, dp(8), 0, 0)
         })
 
         return root
     }
+
+    private fun controllerHeader(): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(8), dp(10), dp(8))
+            background = rounded(surface, dp(22), border, 1)
+
+            addView(TextView(this@MainActivity).apply {
+                text = "H"
+                gravity = Gravity.CENTER
+                textSize = 19f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(bgTop)
+                background = rounded(accent, dp(15), null, 0)
+            }, LinearLayout.LayoutParams(dp(44), dp(44)))
+
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), 0, 0, 0)
+
+                addView(TextView(this@MainActivity).apply {
+                    text = "Hermes Control"
+                    setTextColor(textPrimary)
+                    textSize = 16f
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                })
+                addView(TextView(this@MainActivity).apply {
+                    text = if (externalDisplayId == null)
+                        "Esperando pantalla externa"
+                    else
+                        (externalDisplayName ?: "Pantalla") + "  •  #" + externalDisplayId
+                    setTextColor(textSecondary)
+                    textSize = 10.5f
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+
+            addView(TextView(this@MainActivity).apply {
+                text = if (externalDisplayId != null && shizuku.isReady) "READY" else "SETUP"
+                setTextColor(if (externalDisplayId != null && shizuku.isReady) success else textSecondary)
+                textSize = 9f
+                letterSpacing = 0.12f
+                gravity = Gravity.CENTER
+                background = rounded(
+                    if (externalDisplayId != null && shizuku.isReady)
+                        Color.argb(38, 112, 226, 154)
+                    else
+                        surfaceSoft,
+                    dp(12),
+                    if (externalDisplayId != null && shizuku.isReady)
+                        Color.argb(75, 112, 226, 154)
+                    else border,
+                    1
+                )
+            }, LinearLayout.LayoutParams(dp(64), dp(30)))
+        }
+
+    private fun modeSwitcher(): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            background = rounded(Color.argb(85, 17, 23, 34), dp(16), border, 1)
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+
+            addView(segmentButton("Escritorio", mode == DesktopMode.DESKTOP) {
+                setMode(DesktopMode.DESKTOP)
+            }, rowWeight())
+            addView(segmentButton("TV", mode == DesktopMode.TV) {
+                setMode(DesktopMode.TV)
+            }, rowWeight())
+            addView(segmentButton(
+                if (shizuku.isReady) "Shizuku ✓" else "Shizuku",
+                shizuku.isReady
+            ) {
+                shizuku.requestOrConnect()
+                setContentView(phoneController())
+            }, rowWeight())
+        }
+
+    private fun emptyDisplayCard(): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = rounded(Color.argb(70, 255, 255, 255), dp(26), border, 1)
+
+            addView(TextView(this@MainActivity).apply {
+                text = "▱"
+                textSize = 34f
+                setTextColor(accent)
+                gravity = Gravity.CENTER
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Conecta una pantalla"
+                textSize = 17f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(textPrimary)
+                gravity = Gravity.CENTER
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "USB-C → HDMI o display compatible"
+                textSize = 11f
+                setTextColor(textSecondary)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(6), 0, 0)
+            })
+        }
+
+    private fun sectionLabel(value: String): TextView =
+        TextView(this).apply {
+            text = value
+            setTextColor(Color.rgb(102, 118, 144))
+            textSize = 9f
+            letterSpacing = 0.16f
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), 0, 0, 0)
+        }
+
+    private fun segmentButton(label: String, selected: Boolean, action: () -> Unit): TextView =
+        TextView(this).apply {
+            text = label
+            gravity = Gravity.CENTER
+            textSize = 11f
+            setTextColor(if (selected) textPrimary else textSecondary)
+            background = rounded(
+                if (selected) Color.argb(95, 39, 55, 75) else Color.TRANSPARENT,
+                dp(12),
+                if (selected) Color.argb(70, 104, 213, 255) else null,
+                if (selected) 1 else 0
+            )
+            setOnClickListener { action() }
+        }
+
+    private fun actionButton(glyph: String, label: String, action: () -> Unit): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            setPadding(dp(4), dp(5), dp(4), dp(4))
+            background = rounded(Color.argb(62, 255, 255, 255), dp(16), border, 1)
+            elevation = dp(1).toFloat()
+            setOnClickListener { action() }
+
+            addView(TextView(this@MainActivity).apply {
+                text = glyph
+                textSize = 16f
+                setTextColor(textPrimary)
+                gravity = Gravity.CENTER
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = label
+                textSize = 8.5f
+                setTextColor(textSecondary)
+                gravity = Gravity.CENTER
+            })
+        }
+
+    private fun wideAction(glyph: String, label: String, action: () -> Unit): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            background = rounded(Color.argb(75, 255, 255, 255), dp(16), border, 1)
+            setOnClickListener { action() }
+
+            addView(TextView(this@MainActivity).apply {
+                text = glyph
+                textSize = 14f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(if (glyph == "H") accent else textPrimary)
+                gravity = Gravity.CENTER
+                setPadding(0, 0, dp(8), 0)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = label
+                textSize = 11f
+                setTextColor(textPrimary)
+                gravity = Gravity.CENTER
+            })
+        }
+
+    private fun rowWeight(): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
+            setMargins(dp(3), dp(2), dp(3), dp(2))
+        }
 
     private fun handlePointerMove(dx: Float, dy: Float, dragging: Boolean) {
         val id = externalDisplayId ?: return
@@ -354,21 +555,22 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     private fun privilegedCombo(vararg keyCodes: Int) {
         val id = externalDisplayId
         if (id == null || !shizuku.isReady || !shizuku.keyCombination(id, *keyCodes)) {
-            Toast.makeText(
-                this,
-                "Requiere Shizuku y soporte del modo escritorio del dispositivo.",
-                Toast.LENGTH_SHORT
-            ).show()
+            showShizukuHint()
         }
     }
 
-    private fun navigationAction(keyCode: Int, accessibilityAction: Int) {
+    private fun navigationAction(keyCode: Int) {
         val id = externalDisplayId
         val sent = id != null && shizuku.isReady && shizuku.key(id, keyCode)
+        if (!sent) showShizukuHint()
+    }
 
-        if (!sent && !HermesAccessibilityService.perform(accessibilityAction)) {
-            openAccessibilityHelp()
-        }
+    private fun showShizukuHint() {
+        Toast.makeText(
+            this,
+            "Activa Shizuku para controles del sistema.",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     private fun setMode(newMode: DesktopMode) {
@@ -377,23 +579,6 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         if (externalDisplayId != null) attachBestExternalDisplay(force = true)
         else setContentView(phoneController())
     }
-
-    private fun openAccessibilityHelp() {
-        Toast.makeText(
-            this,
-            "Activa “Hermes Desktop controls” en Accesibilidad como fallback.",
-            Toast.LENGTH_LONG
-        ).show()
-        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-    }
-
-    private fun actionButton(textValue: String, action: () -> Unit): Button =
-        Button(this).apply {
-            text = textValue
-            isAllCaps = false
-            textSize = 12f
-            setOnClickListener { action() }
-        }
 
     private fun launchApp(app: AppEntry, displayId: Int) =
         launchPackage(app.packageName, displayId)
@@ -434,6 +619,20 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
             ).show()
         }
     }
+
+    private fun rounded(
+        color: Int,
+        radius: Int,
+        strokeColor: Int?,
+        strokeWidth: Int
+    ): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = radius.toFloat()
+            if (strokeColor != null && strokeWidth > 0) {
+                setStroke(dp(strokeWidth), strokeColor)
+            }
+        }
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
