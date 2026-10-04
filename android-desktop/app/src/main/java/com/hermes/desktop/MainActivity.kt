@@ -72,6 +72,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
                 if (!isFinishing && !isDestroyed) {
                     if (::shizuku.isInitialized && shizuku.isReady) {
                         shizuku.startVirtualMouse()
+                        trackpadFocused = true
                     }
                     setContentView(phoneController())
                 }
@@ -186,7 +187,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         }
 
     private fun phoneController(): View {
-        if (externalDisplayId != null && trackpadFocused) {
+        if (externalDisplayId != null && trackpadFocused && shizuku.isReady) {
             return dexTrackpadController()
         }
 
