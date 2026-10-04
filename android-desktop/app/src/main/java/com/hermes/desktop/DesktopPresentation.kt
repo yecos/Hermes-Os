@@ -23,8 +23,9 @@ class DesktopPresentation(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
-        shell = shellFactory(context)
-        setContentView(shell)
+        val createdShell = shellFactory(context)
+        shell = createdShell
+        setContentView(createdShell)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
