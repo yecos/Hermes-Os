@@ -27,6 +27,15 @@
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <activity
+            android:name=".DesktopActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboard|keyboardHidden"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:taskAffinity="${applicationId}.desktop" />
+
+        <activity
             android:name=".MainActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboard|keyboardHidden"
             android:exported="true"
