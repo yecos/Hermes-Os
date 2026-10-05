@@ -19,7 +19,7 @@ $uri = [Uri][string]$payload.websocket_url
 $connectCts = [Threading.CancellationTokenSource]::new()
 $connectCts.CancelAfter(5000)
 try {
-    $ws.ConnectAsync($uri, $connectCts.Token).GetAwaiter().GetResult()
+    $ws.ConnectAsync($uri, $connectCts.Token).GetAwaiter().GetResult() | Out-Null
 }
 finally {
     $connectCts.Dispose()
@@ -35,7 +35,7 @@ function Send-Text([string]$text) {
         [System.Net.WebSockets.WebSocketMessageType]::Text,
         $true,
         [Threading.CancellationToken]::None
-    ).GetAwaiter().GetResult()
+    ).GetAwaiter().GetResult() | Out-Null
 }
 
 function Receive-Text {
@@ -285,7 +285,7 @@ finally {
                 [System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure,
                 "done",
                 [Threading.CancellationToken]::None
-            ).GetAwaiter().GetResult()
+            ).GetAwaiter().GetResult() | Out-Null
         } catch {}
     }
     $ws.Dispose()
