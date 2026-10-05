@@ -43,7 +43,7 @@ function Get-Patterns($element) {
             }
         } catch {}
     }
-    return @($names)
+    return $names.ToArray()
 }
 
 function Get-TopWindow($windowRef) {
@@ -173,7 +173,7 @@ function Walk-Elements($root, $rootRef, $maxDepth, $maxResults, $query) {
     }
 
     Visit $root 0
-    return @($results)
+    return $results.ToArray()
 }
 
 function Decode-ElementToken($token) {
