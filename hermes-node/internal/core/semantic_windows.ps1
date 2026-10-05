@@ -258,13 +258,17 @@ switch ($Action) {
             throw "Element does not support InvokePattern."
         }
         $pattern.Invoke()
-        Emit (To-ElementObject $element "" 0 0)
+        $obj = To-ElementObject $element "" 0 0
+        $obj["element_id"] = [string]$payload.element_id
+        Emit $obj
     }
 
     "focus" {
         $element = Resolve-Element $payload.element_id
         $element.SetFocus()
-        Emit (To-ElementObject $element "" 0 0)
+        $obj = To-ElementObject $element "" 0 0
+        $obj["element_id"] = [string]$payload.element_id
+        Emit $obj
     }
 
     "set_value" {
@@ -275,17 +279,21 @@ switch ($Action) {
         }
         if ($pattern.Current.IsReadOnly) { throw "Element is read-only." }
         $pattern.SetValue([string]$payload.text)
-        Emit (To-ElementObject $element "" 0 0)
+        $obj = To-ElementObject $element "" 0 0
+        $obj["element_id"] = [string]$payload.element_id
+        Emit $obj
     }
 
     "click_point" {
         $element = Resolve-Element $payload.element_id
         $rect = $element.Current.BoundingRectangle
         if ($rect.Width -le 0 -or $rect.Height -le 0) { throw "Element has no clickable bounds." }
+        $obj = To-ElementObject $element "" 0 0
+        $obj["element_id"] = [string]$payload.element_id
         Emit ([ordered]@{
             x = [int][Math]::Round($rect.Left + ($rect.Width / 2))
             y = [int][Math]::Round($rect.Top + ($rect.Height / 2))
-            element = (To-ElementObject $element "" 0 0)
+            element = $obj
         })
     }
 
@@ -294,7 +302,9 @@ switch ($Action) {
         $pattern = $null
         if ($element.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$pattern)) {
             $pattern.ScrollIntoView()
-            Emit (To-ElementObject $element "" 0 0)
+            $obj = To-ElementObject $element "" 0 0
+            $obj["element_id"] = [string]$payload.element_id
+            Emit $obj
         } else {
             throw "Element does not support ScrollItemPattern."
         }
