@@ -208,6 +208,15 @@ func (s *Server) call(name string, a map[string]any) (string, error) {
 		}
 		return "ok", nil
 
+	case "edit_block":
+		v, err := s.node.EditBlock(
+			stringArg(a, "path"),
+			stringArg(a, "old_text"),
+			stringArg(a, "new_text"),
+			intArg(a, "expected_replacements", 1),
+		)
+		return core.JSON(v), err
+
 	case "move_file":
 		err := s.node.MovePath(
 			stringArg(a, "source"),
@@ -351,6 +360,16 @@ func tools() []map[string]any {
 				"content": stringType(),
 				"append":  boolType(),
 			}, "path", "content"),
+		},
+		{
+			"name":        "edit_block",
+			"description": "Apply a surgical exact-text replacement to a UTF-8 text file.",
+			"inputSchema": schema(map[string]any{
+				"path":                  stringType(),
+				"old_text":              stringType(),
+				"new_text":              stringType(),
+				"expected_replacements": intType(),
+			}, "path", "old_text", "new_text"),
 		},
 		{
 			"name":        "move_file",
