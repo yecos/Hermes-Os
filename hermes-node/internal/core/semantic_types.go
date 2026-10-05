@@ -70,3 +70,46 @@ type BrowserTab struct {
 	URL         string `json:"url"`
 	DevToolsURL string `json:"devtools_url,omitempty"`
 }
+
+type BrowserElement struct {
+	ElementID string `json:"element_id"`
+	Tag       string `json:"tag,omitempty"`
+	Role      string `json:"role,omitempty"`
+	Text      string `json:"text,omitempty"`
+	AriaLabel string `json:"aria_label,omitempty"`
+	Placeholder string `json:"placeholder,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Type      string `json:"type,omitempty"`
+	Value     string `json:"value,omitempty"`
+	Href      string `json:"href,omitempty"`
+	Disabled  bool   `json:"disabled"`
+	Checked   bool   `json:"checked"`
+	X         int    `json:"x,omitempty"`
+	Y         int    `json:"y,omitempty"`
+	Width     int    `json:"width,omitempty"`
+	Height    int    `json:"height,omitempty"`
+}
+
+type BrowserSnapshot struct {
+	TabID        string           `json:"tab_id"`
+	Title        string           `json:"title"`
+	URL          string           `json:"url"`
+	ElementCount int              `json:"element_count"`
+	Elements     []BrowserElement `json:"elements"`
+}
+
+type BrowserActionResult struct {
+	OK        bool   `json:"ok"`
+	ElementID string `json:"element_id,omitempty"`
+	Title     string `json:"title,omitempty"`
+	URL       string `json:"url,omitempty"`
+	Value     string `json:"value,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+type BrowserPageText struct {
+	Title     string `json:"title"`
+	URL       string `json:"url"`
+	Text      string `json:"text"`
+	Truncated bool   `json:"truncated"`
+}
