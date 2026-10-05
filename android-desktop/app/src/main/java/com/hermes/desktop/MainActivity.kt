@@ -76,10 +76,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         shizuku = ShizukuBridge(this) {
             runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
-                    if (::shizuku.isInitialized && shizuku.isReady) {
-                        shizuku.startVirtualMouse()
-                        trackpadFocused = true
-                    }
+                    syncMouseBackendForCurrentMode()
                     setContentView(phoneController())
                 }
             }
@@ -94,9 +91,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         super.onResume()
         displayManager.registerDisplayListener(this, null)
         if (shellVisible) attachBestExternalDisplay()
-        if (::shizuku.isInitialized && shizuku.isReady) {
-            shizuku.startVirtualMouse()
-        }
+        syncMouseBackendForCurrentMode()
         setContentView(phoneController())
     }
 
@@ -130,6 +125,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     }
 
     override fun onDisplayChanged(displayId: Int) {
+        syncMouseBackendForCurrentMode()
         if (shellVisible) attachBestExternalDisplay()
     }
 
@@ -190,6 +186,24 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         return physicalExternalDisplay()
     }
 
+    private fun virtualMouseAllowed(): Boolean =
+        ::shizuku.isInitialized && shizuku.isReady && !isSamsungDexDualMode()
+
+    private fun syncMouseBackendForCurrentMode() {
+        if (!::shizuku.isInitialized || !shizuku.isReady) return
+
+        if (isSamsungDexDualMode()) {
+            // DeX already owns the physical USB/Bluetooth mouse and routes it through
+            // viewport type 100. A second uinput mouse can become mConnectedMouse and
+            // interfere with Samsung's native cursor routing, so keep it stopped.
+            runCatching { shizuku.stopVirtualMouse() }
+            trackpadFocused = false
+        } else {
+            shizuku.startVirtualMouse()
+            trackpadFocused = true
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun attachBestExternalDisplay(force: Boolean = false) {
         val target = resolveHermesDesktopTarget() ?: return
@@ -221,9 +235,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         shellVisible = true
         launchDesktopActivity(target.displayId)
 
-        if (::shizuku.isInitialized && shizuku.isReady) {
-            shizuku.startVirtualMouse()
-        }
+        syncMouseBackendForCurrentMode()
         setContentView(phoneController())
     }
 
@@ -244,7 +256,7 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         }
 
     private fun phoneController(): View {
-        if (externalDisplayId != null && trackpadFocused && shizuku.isReady) {
+        if (externalDisplayId != null && trackpadFocused && virtualMouseAllowed()) {
             return dexTrackpadController()
         }
 
@@ -307,26 +319,26 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
                     this,
                     onMove = { dx, dy, dragging -> handlePointerMove(dx, dy, dragging) },
                     onTap = {
-                        if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                        if (virtualMouseAllowed() && shizuku.startVirtualMouse()) {
                             shizuku.virtualMouseClick(1)
                         } else {
                             shellView?.activateSelection()
                         }
                     },
                     onSecondaryTap = {
-                        if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                        if (virtualMouseAllowed() && shizuku.startVirtualMouse()) {
                             shizuku.virtualMouseClick(2)
                         }
                     },
                     onScroll = { dy ->
-                        if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                        if (virtualMouseAllowed() && shizuku.startVirtualMouse()) {
                             shizuku.virtualMouseScroll(if (dy > 0) -1 else 1)
                         } else {
                             shellView?.navigate(0, if (dy > 0) 1 else -1)
                         }
                     },
                     onDragStart = {
-                        if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                        if (virtualMouseAllowed() && shizuku.startVirtualMouse()) {
                             shizuku.virtualMouseButton(1, true)
                         }
                     },
@@ -538,26 +550,26 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
                 this,
                 onMove = { dx, dy, dragging -> handlePointerMove(dx, dy, dragging) },
                 onTap = {
-                    if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                    if (virtualMouseAllowed() && shizuku.startVirtualMouse()) {
                         shizuku.virtualMouseClick(1)
                     } else {
                         shellView?.activateSelection()
                     }
                 },
                 onSecondaryTap = {
-                    if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                    if (virtualMouseAllowed() && shizuku.startVirtualMouse()) {
                         shizuku.virtualMouseClick(2)
                     }
                 },
                 onScroll = { dy ->
-                    if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                    if (virtualMouseAllowed() && shizuku.startVirtualMouse()) {
                         shizuku.virtualMouseScroll(if (dy > 0) -1 else 1)
                     } else {
                         shellView?.navigate(0, if (dy > 0) 1 else -1)
                     }
                 },
                 onDragStart = {
-                    if (shizuku.isReady && shizuku.startVirtualMouse()) {
+                    if (virtualMouseAllowed() && shizuku.startVirtualMouse()) {
                         shizuku.virtualMouseButton(1, true)
                     }
                 },
@@ -818,6 +830,12 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
 
     private fun handlePointerMove(dx: Float, dy: Float, dragging: Boolean) {
         val id = externalDisplayId ?: return
+
+        if (isSamsungDexDualMode()) {
+            // In DeX Dual Mode the physical mouse belongs to Samsung's native input
+            // pipeline. Do not inject pointer events from the phone touchpad.
+            return
+        }
 
         if (!shizuku.isReady) {
             if (abs(dx) > abs(dy)) {
