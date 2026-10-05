@@ -23,6 +23,7 @@
       "Search and edit files",
       "Capture the desktop",
       "Inspect and operate semantic UI elements",
+      "Control managed Chrome through DOM/CDP",
       "Control windows, mouse and keyboard",
       "Read and write the clipboard",
       "Inspect system status"
