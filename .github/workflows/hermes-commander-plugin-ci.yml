@@ -6,12 +6,14 @@ on:
       - ".agents/plugins/**"
       - "plugins/hermes-commander/**"
       - "scripts/install-hermes-commander-chatgpt.ps1"
+      - "scripts/bootstrap-hermes-commander-chatgpt.ps1"
       - ".github/workflows/hermes-commander-plugin-ci.yml"
   pull_request:
     paths:
       - ".agents/plugins/**"
       - "plugins/hermes-commander/**"
       - "scripts/install-hermes-commander-chatgpt.ps1"
+      - "scripts/bootstrap-hermes-commander-chatgpt.ps1"
       - ".github/workflows/hermes-commander-plugin-ci.yml"
 
 jobs:
@@ -60,7 +62,8 @@ jobs:
         run: |
           $files = @(
             "plugins/hermes-commander/scripts/launch-windows.ps1",
-            "scripts/install-hermes-commander-chatgpt.ps1"
+            "scripts/install-hermes-commander-chatgpt.ps1",
+            "scripts/bootstrap-hermes-commander-chatgpt.ps1"
           )
 
           foreach ($file in $files) {
