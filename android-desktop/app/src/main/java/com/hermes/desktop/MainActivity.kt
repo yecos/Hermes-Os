@@ -173,13 +173,14 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
 
     private fun physicalExternalDisplay(): Display? {
         val primaryId = windowManager.defaultDisplay.displayId
-        return displayManager.displays.firstOrNull { display ->
-            display.displayId != primaryId &&
-                display.state == Display.STATE_ON &&
-                display.type == Display.TYPE_EXTERNAL
-        } ?: displayManager.displays.firstOrNull { display ->
-            display.displayId != primaryId && display.state == Display.STATE_ON
-        }
+        return displayManager
+            .getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
+            .firstOrNull { display ->
+                display.displayId != primaryId && display.state == Display.STATE_ON
+            }
+            ?: displayManager.displays.firstOrNull { display ->
+                display.displayId != primaryId && display.state == Display.STATE_ON
+            }
     }
 
     private fun resolveHermesDesktopTarget(): Display? {
