@@ -8,7 +8,14 @@ import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
+import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.PointerIcon
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
 import java.util.concurrent.Executors
@@ -31,6 +38,40 @@ class DesktopActivity : Activity() {
 
     private var mode = DesktopMode.DESKTOP
     private val recentPackages = mutableListOf<String>()
+    private var lastMouseMoveLogAt = 0L
+
+    private fun isMouseEvent(event: MotionEvent): Boolean =
+        event.source and InputDevice.SOURCE_MOUSE == InputDevice.SOURCE_MOUSE
+
+    private fun traceMouse(stage: String, event: MotionEvent) {
+        if (!isMouseEvent(event)) return
+
+        val isContinuous = event.actionMasked == MotionEvent.ACTION_HOVER_MOVE ||
+            event.actionMasked == MotionEvent.ACTION_MOVE
+        val now = SystemClock.uptimeMillis()
+        if (isContinuous && now - lastMouseMoveLogAt < 250L) return
+        if (isContinuous) lastMouseMoveLogAt = now
+
+        Log.i(
+            "HermesMouseTrace",
+            "stage=$stage action=${MotionEvent.actionToString(event.actionMasked)} " +
+                "display=${display?.displayId ?: -1} source=0x${event.source.toString(16)} " +
+                "deviceId=${event.deviceId} device=${event.device?.name ?: \"unknown\"} " +
+                "x=${event.x.toInt()} y=${event.y.toInt()} buttons=${event.buttonState} " +
+                "vscroll=${event.getAxisValue(MotionEvent.AXIS_VSCROLL)} " +
+                "hscroll=${event.getAxisValue(MotionEvent.AXIS_HSCROLL)}"
+        )
+    }
+
+    private fun forceSystemArrow(view: View) {
+        val arrow = PointerIcon.getSystemIcon(this, PointerIcon.TYPE_ARROW)
+        view.pointerIcon = arrow
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                forceSystemArrow(view.getChildAt(index))
+            }
+        }
+    }
 
     private val taskRefresh = object : Runnable {
         override fun run() {
@@ -94,6 +135,16 @@ class DesktopActivity : Activity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        traceMouse("generic", event)
+        return super.dispatchGenericMotionEvent(event)
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        traceMouse("touch", event)
+        return super.dispatchTouchEvent(event)
+    }
+
     private fun restoreState() {
         recentPackages.clear()
         recentPackages += prefs.getString("recent_packages", "")
@@ -145,7 +196,9 @@ class DesktopActivity : Activity() {
         shellView.isFocusable = true
         shellView.isFocusableInTouchMode = true
         setContentView(shellView)
+        forceSystemArrow(shellView)
         shellView.post {
+            forceSystemArrow(shellView)
             window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
             shellView.requestFocus()
             handler.removeCallbacks(taskRefresh)
