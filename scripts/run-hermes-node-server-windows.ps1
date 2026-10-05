@@ -23,5 +23,6 @@ foreach ($line in Get-Content -LiteralPath $configFile) {
 
 $stamp = Get-Date -Format o
 Add-Content -LiteralPath $logFile -Value "[$stamp] starting Hermes Node serve"
-& $binary serve *>> $logFile
+$cmdLine = '""{0}" serve >> "{1}" 2>&1"' -f $binary, $logFile
+& cmd.exe /d /s /c $cmdLine
 exit $LASTEXITCODE
