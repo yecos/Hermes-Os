@@ -144,6 +144,19 @@ func (s *Server) handle(req request) response {
 				res.Result = screenshotToolResult(shot)
 			}
 			break
+
+		case "browser_screenshot":
+			shot, err := s.node.BrowserScreenshot(
+				stringArg(p.Arguments, "tab_id"),
+				stringArg(p.Arguments, "format"),
+				intArg(p.Arguments, "quality", 82),
+			)
+			if err != nil {
+				res.Result = toolResult(err.Error(), true)
+			} else {
+				res.Result = screenshotToolResult(shot)
+			}
+			break
 		}
 
 		if res.Result != nil {
@@ -535,6 +548,42 @@ func (s *Server) call(name string, a map[string]any) (string, error) {
 		v, err := s.node.BrowserOpenTab(stringArg(a, "url"))
 		return core.JSON(v), err
 
+	case "browser_snapshot":
+		v, err := s.node.BrowserSnapshot(
+			stringArg(a, "tab_id"),
+			intArg(a, "max_results", 150),
+		)
+		return core.JSON(v), err
+
+	case "browser_click":
+		v, err := s.node.BrowserClick(
+			stringArg(a, "tab_id"),
+			stringArg(a, "element_id"),
+		)
+		return core.JSON(v), err
+
+	case "browser_set_text":
+		v, err := s.node.BrowserSetText(
+			stringArg(a, "tab_id"),
+			stringArg(a, "element_id"),
+			stringArg(a, "text"),
+		)
+		return core.JSON(v), err
+
+	case "browser_navigate":
+		v, err := s.node.BrowserNavigate(
+			stringArg(a, "tab_id"),
+			stringArg(a, "url"),
+		)
+		return core.JSON(v), err
+
+	case "browser_page_text":
+		v, err := s.node.BrowserPageText(
+			stringArg(a, "tab_id"),
+			intArg(a, "max_chars", 20000),
+		)
+		return core.JSON(v), err
+
 	default:
 		return "", fmt.Errorf("unknown tool %q", name)
 	}
@@ -893,6 +942,56 @@ func tools() []map[string]any {
 			"name":        "browser_open_tab",
 			"description": "Open a new URL in the Hermes-managed Chrome instance through the local DevTools endpoint.",
 			"inputSchema": schema(map[string]any{"url": stringType()}, "url"),
+		},
+		{
+			"name":        "browser_snapshot",
+			"description": "Return a compact semantic snapshot of visible interactive DOM elements in a managed Chrome tab. Elements receive stable element_id values for follow-up browser actions.",
+			"inputSchema": schema(map[string]any{
+				"tab_id":      stringType(),
+				"max_results": map[string]any{"type": "integer", "minimum": 1, "maximum": 500},
+			}),
+		},
+		{
+			"name":        "browser_click",
+			"description": "Click a DOM element by element_id from browser_snapshot without using screen coordinates.",
+			"inputSchema": schema(map[string]any{
+				"tab_id":     stringType(),
+				"element_id": stringType(),
+			}, "element_id"),
+		},
+		{
+			"name":        "browser_set_text",
+			"description": "Set text/value in an editable DOM element and dispatch input/change events.",
+			"inputSchema": schema(map[string]any{
+				"tab_id":     stringType(),
+				"element_id": stringType(),
+				"text":       stringType(),
+			}, "element_id", "text"),
+		},
+		{
+			"name":        "browser_navigate",
+			"description": "Navigate a managed Chrome tab to a URL through Chrome DevTools Protocol.",
+			"inputSchema": schema(map[string]any{
+				"tab_id": stringType(),
+				"url":    stringType(),
+			}, "url"),
+		},
+		{
+			"name":        "browser_page_text",
+			"description": "Read the visible page text from a managed Chrome tab without OCR.",
+			"inputSchema": schema(map[string]any{
+				"tab_id":    stringType(),
+				"max_chars": map[string]any{"type": "integer", "minimum": 100, "maximum": 100000},
+			}),
+		},
+		{
+			"name":        "browser_screenshot",
+			"description": "Capture the current managed Chrome viewport directly through DevTools and return it as MCP image content.",
+			"inputSchema": schema(map[string]any{
+				"tab_id": stringType(),
+				"format": map[string]any{"type": "string", "enum": []string{"jpeg", "png"}},
+				"quality": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
+			}),
 		},
 	}
 
