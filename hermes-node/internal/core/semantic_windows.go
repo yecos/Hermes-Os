@@ -36,16 +36,19 @@ func (n *Node) runSemanticPowerShell(action string, payload any, out any) error 
 		return err
 	}
 	encodedPayload := base64.StdEncoding.EncodeToString(raw)
-	encodedScript := base64.StdEncoding.EncodeToString([]byte(utf16LEWithBOM(semanticPowerShell)))
+	scriptPayload := base64.StdEncoding.EncodeToString([]byte(semanticPowerShell))
+	wrapper := fmt.Sprintf(
+		"$script=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s')); & ([ScriptBlock]::Create($script)) -Action '%s' -PayloadBase64 '%s'",
+		scriptPayload, action, encodedPayload,
+	)
+	encodedCommand := base64.StdEncoding.EncodeToString(utf16LE(wrapper))
 	cmd := exec.Command(
 		"powershell.exe",
 		"-NoLogo",
 		"-NoProfile",
 		"-NonInteractive",
 		"-ExecutionPolicy", "Bypass",
-		"-EncodedCommand", encodedScript,
-		"-Action", action,
-		"-PayloadBase64", encodedPayload,
+		"-EncodedCommand", encodedCommand,
 	)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
@@ -67,11 +70,9 @@ func (n *Node) runSemanticPowerShell(action string, payload any, out any) error 
 	return nil
 }
 
-func utf16LEWithBOM(s string) []byte {
+func utf16LE(s string) []byte {
 	runes := []rune(s)
-	encoded := make([]byte, 2, 2+len(runes)*2)
-	encoded[0] = 0xFF
-	encoded[1] = 0xFE
+	encoded := make([]byte, 0, len(runes)*2)
 	for _, r := range runes {
 		if r <= 0xFFFF {
 			encoded = append(encoded, byte(r), byte(r>>8))
@@ -84,7 +85,6 @@ func utf16LEWithBOM(s string) []byte {
 	}
 	return encoded
 }
-
 func normalizeUIQuery(q UIQuery) UIQuery {
 	if q.MaxDepth <= 0 {
 		q.MaxDepth = 8
