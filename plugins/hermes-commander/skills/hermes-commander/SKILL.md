@@ -47,8 +47,22 @@ When `invoke_element` is supported, prefer it over `click_element`.
 - `browser_open_managed` — launch a dedicated Chrome instance with local DevTools enabled.
 - `browser_tabs` — inspect its current page tabs.
 - `browser_open_tab` — open a URL as a new managed tab.
+- `browser_snapshot` — inspect visible interactive DOM elements and receive stable browser element IDs.
+- `browser_click` — click a DOM element by browser element ID.
+- `browser_set_text` — set text/value and dispatch input/change events.
+- `browser_navigate` — navigate a selected tab through Chrome DevTools.
+- `browser_page_text` — read visible page text directly from the DOM, without OCR.
+- `browser_screenshot` — capture the browser viewport directly through DevTools.
 
-Use the managed browser for browser workflows that benefit from stable tab discovery. Use UI Automation and screenshots to interact with page UI until deeper DOM/CDP actions are available.
+For managed Chrome workflows use this priority:
+
+1. `browser_tabs` / `browser_snapshot`.
+2. DOM actions such as `browser_click` and `browser_set_text`.
+3. `browser_page_text` for page understanding when visual layout is not required.
+4. `browser_screenshot` for visual verification.
+5. Windows UI Automation or raw mouse only when the page does not expose the needed action through the browser semantic layer.
+
+After browser navigation or a click that changes the page, take a fresh browser snapshot before reusing element IDs.
 
 ## Existing system / development tools
 
