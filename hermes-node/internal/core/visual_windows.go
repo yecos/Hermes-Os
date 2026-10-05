@@ -432,8 +432,43 @@ func utf16Ptr(s string) (*uint16, error) {
 	return syscall.UTF16PtrFromString(s)
 }
 
+func resolveApplicationTarget(target string) string {
+	trimmed := strings.TrimSpace(target)
+	lower := strings.ToLower(trimmed)
+	candidates := map[string][]string{
+		"chrome": {
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(os.Getenv("ProgramFiles"), "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(os.Getenv("ProgramFiles(x86)"), "Google", "Chrome", "Application", "chrome.exe"),
+		},
+		"chrome.exe": {
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(os.Getenv("ProgramFiles"), "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(os.Getenv("ProgramFiles(x86)"), "Google", "Chrome", "Application", "chrome.exe"),
+		},
+		"edge": {
+			filepath.Join(os.Getenv("ProgramFiles(x86)"), "Microsoft", "Edge", "Application", "msedge.exe"),
+			filepath.Join(os.Getenv("ProgramFiles"), "Microsoft", "Edge", "Application", "msedge.exe"),
+		},
+		"msedge": {
+			filepath.Join(os.Getenv("ProgramFiles(x86)"), "Microsoft", "Edge", "Application", "msedge.exe"),
+			filepath.Join(os.Getenv("ProgramFiles"), "Microsoft", "Edge", "Application", "msedge.exe"),
+		},
+	}
+	if items, ok := candidates[lower]; ok {
+		for _, item := range items {
+			if item != "" {
+				if info, err := os.Stat(item); err == nil && !info.IsDir() {
+					return item
+				}
+			}
+		}
+	}
+	return trimmed
+}
+
 func (n *Node) OpenApplication(req OpenApplicationRequest) error {
-	target := strings.TrimSpace(req.Target)
+	target := resolveApplicationTarget(req.Target)
 	if target == "" {
 		return errors.New("target is required")
 	}
@@ -470,7 +505,7 @@ func (n *Node) OpenApplication(req OpenApplicationRequest) error {
 	if result <= 32 {
 		return fmt.Errorf("ShellExecuteW failed with code %d: %v", result, callErr)
 	}
-	n.record("open_application", map[string]any{"target": target, "parameters": req.Parameters, "dir": dir}, true, nil)
+	n.record("open_application", map[string]any{"requested_target": req.Target, "resolved_target": target, "parameters": req.Parameters, "dir": dir}, true, nil)
 	return nil
 }
 
@@ -730,6 +765,3 @@ func (n *Node) ClipboardWrite(text string) error {
 	n.record("clipboard_write", map[string]any{"characters": len([]rune(text))}, true, nil)
 	return nil
 }
-
-var _ = filepath.Separator
-var _ = os.PathSeparator
