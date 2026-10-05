@@ -4,6 +4,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$OutputEncoding = [Text.Encoding]::UTF8
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName WindowsBase
@@ -233,21 +235,29 @@ function Emit($value) {
 switch ($Action) {
     "snapshot" {
         $root = Get-TopWindow $payload.window
+        $rootRef = [string]$payload.window
+        if (-not $rootRef -and $root.Current.NativeWindowHandle -ne 0) {
+            $rootRef = ("0x{0:X}" -f [int]$root.Current.NativeWindowHandle)
+        }
         $maxDepth = if ($payload.max_depth) { [Math]::Min([Math]::Max([int]$payload.max_depth, 1), 20) } else { 8 }
         $maxResults = if ($payload.max_results) { [Math]::Min([Math]::Max([int]$payload.max_results, 1), 1000) } else { 250 }
         $query = [pscustomobject]@{}
-        $elements = Walk-Elements $root $payload.window $maxDepth $maxResults $query
+        $elements = Walk-Elements $root $rootRef $maxDepth $maxResults $query
         Emit ([ordered]@{
-            window = [string]$payload.window
+            window = $rootRef
             elements = @($elements)
         })
     }
 
     "find" {
         $root = Get-TopWindow $payload.window
+        $rootRef = [string]$payload.window
+        if (-not $rootRef -and $root.Current.NativeWindowHandle -ne 0) {
+            $rootRef = ("0x{0:X}" -f [int]$root.Current.NativeWindowHandle)
+        }
         $maxDepth = if ($payload.max_depth) { [Math]::Min([Math]::Max([int]$payload.max_depth, 1), 32) } else { 16 }
         $maxResults = if ($payload.max_results) { [Math]::Min([Math]::Max([int]$payload.max_results, 1), 200) } else { 20 }
-        $elements = Walk-Elements $root $payload.window $maxDepth $maxResults $payload
+        $elements = Walk-Elements $root $rootRef $maxDepth $maxResults $payload
         Emit @($elements)
     }
 
