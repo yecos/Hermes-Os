@@ -23,6 +23,12 @@ func TestSemanticToolsAreAdvertised(t *testing.T) {
 		"browser_open_managed",
 		"browser_tabs",
 		"browser_open_tab",
+		"browser_snapshot",
+		"browser_click",
+		"browser_set_text",
+		"browser_navigate",
+		"browser_page_text",
+		"browser_screenshot",
 	}
 
 	for _, name := range required {
