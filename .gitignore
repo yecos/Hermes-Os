@@ -13,3 +13,9 @@ homeassistant/deps/
 
 data/
 *.pid
+
+# Hermes Node local builds
+hermes-node/hermes-node
+hermes-node/hermes-node.exe
+hermes-node/*.test
+hermes-node/dist/
