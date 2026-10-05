@@ -60,7 +60,7 @@ func (n *Node) Device() map[string]any {
 		"working_directory": wd,
 		"started_at":        n.started.UTC(),
 		"uptime_seconds":    int64(time.Since(n.started).Seconds()),
-		"version":           "0.4.0",
+		"version":           "0.5.0",
 		"exec_mode":         n.cfg.ExecMode,
 		"allowed_roots":     n.cfg.AllowedRoots,
 		"capabilities":      capabilities,

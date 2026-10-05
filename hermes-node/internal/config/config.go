@@ -21,6 +21,7 @@ type Config struct {
 	CommandTimeout  time.Duration
 	MaxReadBytes    int64
 	MaxWriteBytes   int64
+	AllowedRemoteCIDRs []string
 }
 
 func Load() (Config, error) {
@@ -78,6 +79,7 @@ func Load() (Config, error) {
 		CommandTimeout:  parseDuration("HERMES_NODE_COMMAND_TIMEOUT", 30*time.Second),
 		MaxReadBytes:    parseBytes("HERMES_NODE_MAX_READ_BYTES", 1024*1024),
 		MaxWriteBytes:   parseBytes("HERMES_NODE_MAX_WRITE_BYTES", 1024*1024),
+		AllowedRemoteCIDRs: parseCSV("HERMES_NODE_ALLOWED_REMOTE_CIDRS"),
 	}, nil
 }
 
@@ -92,6 +94,22 @@ func parseRoots(v string) []string {
 			if abs, err := filepath.Abs(p); err == nil {
 				out = append(out, filepath.Clean(abs))
 			}
+		}
+	}
+	return out
+}
+
+
+func parseCSV(key string) []string {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return nil
+	}
+	out := []string{}
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			out = append(out, item)
 		}
 	}
 	return out

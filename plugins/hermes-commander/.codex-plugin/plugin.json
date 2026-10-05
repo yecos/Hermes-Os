@@ -1,6 +1,6 @@
 {
   "name": "hermes-commander",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Local computer control for ChatGPT Desktop through Hermes Node.",
   "author": {
     "name": "Hermes OS"
@@ -11,7 +11,7 @@
   "interface": {
     "displayName": "Hermes Commander",
     "shortDescription": "Control your local computer",
-    "longDescription": "Hermes Commander gives ChatGPT Desktop local MCP tools backed by Hermes Node for files, terminal, processes, screenshots, Windows UI Automation, semantic element control, mouse, keyboard, clipboard and a managed Chrome surface. It is intended for computers you own and control.",
+    "longDescription": "Hermes Commander gives ChatGPT Desktop a multi-device control plane backed by Hermes Nodes for files, terminals, processes, screenshots, Windows UI Automation, semantic element control, managed Chrome and private Tailscale-connected computers or Android/Termux nodes that you own and control.",
     "developerName": "Hermes OS",
     "category": "Developer Tools",
     "capabilities": [
@@ -23,6 +23,7 @@
       "Search and edit files",
       "Capture the desktop",
       "Inspect and operate semantic UI elements",
+      "Select and control multiple private Hermes Nodes",
       "Control managed Chrome through DOM/CDP",
       "Control windows, mouse and keyboard",
       "Read and write the clipboard",

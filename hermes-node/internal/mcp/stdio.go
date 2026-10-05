@@ -33,17 +33,18 @@ type rpcError struct {
 }
 
 type Server struct {
-	node *core.Node
-	in   io.Reader
-	out  io.Writer
+	node    *core.Node
+	devices *DeviceManager
+	in      io.Reader
+	out     io.Writer
 }
 
 func New(node *core.Node) *Server {
-	return &Server{node: node, in: os.Stdin, out: os.Stdout}
+	return &Server{node: node, devices: NewDeviceManager(node), in: os.Stdin, out: os.Stdout}
 }
 
 func NewIO(node *core.Node, in io.Reader, out io.Writer) *Server {
-	return &Server{node: node, in: in, out: out}
+	return &Server{node: node, devices: NewDeviceManager(node), in: in, out: out}
 }
 
 func (s *Server) Serve() error {
@@ -84,7 +85,7 @@ func (s *Server) handle(req request) response {
 		res.Result = map[string]any{
 			"protocolVersion": "2025-11-25",
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "hermes-commander", "version": "0.4.0"},
+			"serverInfo":      map[string]any{"name": "hermes-commander", "version": "0.5.0"},
 		}
 
 	case "ping":
@@ -100,6 +101,11 @@ func (s *Server) handle(req request) response {
 		}
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return fail(req.ID, -32602, err.Error())
+		}
+
+		if s.devices != nil {
+			res.Result = s.handleMultiDeviceCall(p.Name, p.Arguments)
+			break
 		}
 
 		switch p.Name {
@@ -996,5 +1002,57 @@ func tools() []map[string]any {
 	}
 
 	all := append(base, visual...)
-	return append(all, semantic...)
+	all = append(all, semantic...)
+
+	deviceID := map[string]any{
+		"type":        "string",
+		"description": "Optional Hermes device id. Omit to use the currently selected device.",
+	}
+	for _, tool := range all {
+		if input, ok := tool["inputSchema"].(map[string]any); ok {
+			if props, ok := input["properties"].(map[string]any); ok {
+				props["device_id"] = deviceID
+			}
+		}
+	}
+
+	management := []map[string]any{
+		{
+			"name":        "devices_list",
+			"description": "List local and registered Hermes Nodes, including online state and capabilities. Tokens are never returned.",
+			"inputSchema": schema(map[string]any{}),
+		},
+		{
+			"name":        "device_current",
+			"description": "Return the currently selected Hermes device.",
+			"inputSchema": schema(map[string]any{}),
+		},
+		{
+			"name":        "device_select",
+			"description": "Select which registered Hermes device subsequent tools should target by default.",
+			"inputSchema": schema(map[string]any{"device_id": stringType()}, "device_id"),
+		},
+		{
+			"name":        "device_ping",
+			"description": "Check one Hermes device and return its live status and capabilities.",
+			"inputSchema": schema(map[string]any{"device_id": stringType()}, "device_id"),
+		},
+		{
+			"name":        "device_add",
+			"description": "Register a Hermes Node reachable only on loopback, private LAN, or Tailscale. The bearer token is stored locally and never exposed by list tools.",
+			"inputSchema": schema(map[string]any{
+				"device_id": stringType(),
+				"name":      stringType(),
+				"url":       stringType(),
+				"token":     stringType(),
+			}, "device_id", "url", "token"),
+		},
+		{
+			"name":        "device_remove",
+			"description": "Remove a registered remote Hermes device. The local device cannot be removed.",
+			"inputSchema": schema(map[string]any{"device_id": stringType()}, "device_id"),
+		},
+	}
+
+	return append(management, all...)
 }

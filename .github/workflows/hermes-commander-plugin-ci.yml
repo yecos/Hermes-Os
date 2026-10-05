@@ -7,6 +7,10 @@ on:
       - "plugins/hermes-commander/**"
       - "scripts/install-hermes-commander-chatgpt.ps1"
       - "scripts/bootstrap-hermes-commander-chatgpt.ps1"
+      - "scripts/run-hermes-node-server-windows.ps1"
+      - "scripts/enable-hermes-node-tailscale-windows.ps1"
+      - "scripts/register-hermes-node-from-ssh.ps1"
+      - "scripts/install-hermes-node-termux.sh"
       - ".github/workflows/hermes-commander-plugin-ci.yml"
       - "hermes-node/internal/core/semantic_windows.ps1"
       - "hermes-node/internal/core/browser_cdp_windows.ps1"
@@ -16,6 +20,10 @@ on:
       - "plugins/hermes-commander/**"
       - "scripts/install-hermes-commander-chatgpt.ps1"
       - "scripts/bootstrap-hermes-commander-chatgpt.ps1"
+      - "scripts/run-hermes-node-server-windows.ps1"
+      - "scripts/enable-hermes-node-tailscale-windows.ps1"
+      - "scripts/register-hermes-node-from-ssh.ps1"
+      - "scripts/install-hermes-node-termux.sh"
       - ".github/workflows/hermes-commander-plugin-ci.yml"
       - "hermes-node/internal/core/semantic_windows.ps1"
       - "hermes-node/internal/core/browser_cdp_windows.ps1"
@@ -68,6 +76,9 @@ jobs:
             "plugins/hermes-commander/scripts/launch-windows.ps1",
             "scripts/install-hermes-commander-chatgpt.ps1",
             "scripts/bootstrap-hermes-commander-chatgpt.ps1",
+            "scripts/run-hermes-node-server-windows.ps1",
+            "scripts/enable-hermes-node-tailscale-windows.ps1",
+            "scripts/register-hermes-node-from-ssh.ps1",
             "hermes-node/internal/core/semantic_windows.ps1",
             "hermes-node/internal/core/browser_cdp_windows.ps1"
           )
@@ -106,3 +117,14 @@ jobs:
 
           & "$env:RUNNER_TEMP\hermes-node.exe" status
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+
+  validate-termux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse Termux installer
+        shell: bash
+        run: |
+          bash -n scripts/install-hermes-node-termux.sh

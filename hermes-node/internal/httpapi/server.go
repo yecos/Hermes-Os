@@ -2,10 +2,13 @@ package httpapi
 
 import (
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +38,7 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /v1/file", s.auth(http.HandlerFunc(s.writeFile)))
 	s.mux.Handle("GET /v1/processes", s.auth(http.HandlerFunc(s.processes)))
 	s.mux.Handle("GET /v1/logs", s.auth(http.HandlerFunc(s.logs)))
+	s.mux.Handle("POST /v1/tool/{name}", s.auth(http.HandlerFunc(s.tool)))
 }
 
 func (s *Server) Handler() http.Handler { return s.mux }
@@ -42,8 +46,45 @@ func (s *Server) Handler() http.Handler { return s.mux }
 func (s *Server) ListenAndServe() error {
 	addr := s.node.Config().Listen
 	log.Printf("Hermes Node listening on http://%s", addr)
-	srv := &http.Server{Addr: addr, Handler: s.mux, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
+	handler := http.Handler(s.mux)
+	if len(s.node.Config().AllowedRemoteCIDRs) > 0 {
+		handler = s.sourceGuard(handler)
+	}
+	srv := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	return srv.ListenAndServe()
+}
+
+
+func (s *Server) sourceGuard(next http.Handler) http.Handler {
+	prefixes := make([]netip.Prefix, 0, len(s.node.Config().AllowedRemoteCIDRs))
+	for _, raw := range s.node.Config().AllowedRemoteCIDRs {
+		if p, err := netip.ParsePrefix(strings.TrimSpace(raw)); err == nil {
+			prefixes = append(prefixes, p)
+		}
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		ip, err := netip.ParseAddr(strings.TrimSpace(host))
+		if err != nil {
+			jsonOut(w, http.StatusForbidden, map[string]any{"error": "source address is not allowed"})
+			return
+		}
+		ip = ip.Unmap()
+		if ip.IsLoopback() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		for _, p := range prefixes {
+			if p.Contains(ip) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		jsonOut(w, http.StatusForbidden, map[string]any{"error": "source address is not allowed"})
+	})
 }
 
 func (s *Server) auth(next http.Handler) http.Handler {
@@ -115,6 +156,43 @@ func (s *Server) processes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) logs(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	jsonOut(w, 200, s.node.Logs(limit))
+}
+
+
+func (s *Server) tool(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	if name == "" {
+		jsonOut(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "tool name is required"})
+		return
+	}
+	var args map[string]any
+	if err := decode(r, &args); err != nil {
+		jsonOut(w, http.StatusBadRequest, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	result, err := s.node.CallTool(name, args)
+	if err != nil {
+		jsonOut(w, http.StatusUnprocessableEntity, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	out := map[string]any{"ok": true}
+	if result.Text != "" {
+		out["text"] = result.Text
+	}
+	if result.Image != nil {
+		out["image"] = map[string]any{
+			"data":        base64.StdEncoding.EncodeToString(result.Image.Data),
+			"mime_type":   result.Image.MIMEType,
+			"format":      result.Image.Format,
+			"display":     result.Image.Display,
+			"left":        result.Image.Left,
+			"top":         result.Image.Top,
+			"width":       result.Image.Width,
+			"height":      result.Image.Height,
+			"captured_at": result.Image.CapturedAt,
+		}
+	}
+	jsonOut(w, http.StatusOK, out)
 }
 
 func decode(r *http.Request, v any) error {
