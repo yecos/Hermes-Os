@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "hermes_commander": {
+      "command": "powershell.exe",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "scripts/launch-windows.ps1"
+      ],
+      "cwd": "."
+    }
+  }
+}
