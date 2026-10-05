@@ -1,0 +1,20 @@
+{
+  "name": "hermes-os",
+  "interface": {
+    "displayName": "Hermes OS"
+  },
+  "plugins": [
+    {
+      "name": "hermes-commander",
+      "source": {
+        "source": "local",
+        "path": "./plugins/hermes-commander"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

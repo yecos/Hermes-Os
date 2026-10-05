@@ -52,9 +52,15 @@ func (n *Node) Device() map[string]any {
 		"working_directory": wd,
 		"started_at":        n.started.UTC(),
 		"uptime_seconds":    int64(time.Since(n.started).Seconds()),
+		"version":           "0.2.0",
 		"exec_mode":         n.cfg.ExecMode,
 		"allowed_roots":     n.cfg.AllowedRoots,
-		"capabilities":      []string{"device_status", "execute_command", "list_directory", "read_file", "write_file", "list_processes", "logs"},
+		"capabilities": []string{
+			"system_status", "execute_command", "list_directory", "get_file_info", "create_directory",
+			"read_file", "read_multiple_files", "write_file", "edit_block", "move_file", "delete_path", "search_files",
+			"list_processes", "kill_process", "start_process", "read_process_output", "interact_with_process",
+			"force_terminate", "list_sessions", "logs",
+		},
 	}
 }
 
@@ -230,7 +236,7 @@ func (n *Node) ReadFile(path string) (string, error) {
 		return "", fmt.Errorf("file exceeds max read size of %d bytes", n.cfg.MaxReadBytes)
 	}
 	if !isText(b) {
-		return "", errors.New("binary files are not supported in v0.1")
+		return "", errors.New("binary files are not supported in v0.2")
 	}
 	n.record("read_file", map[string]any{"path": resolved, "bytes": len(b)}, true, nil)
 	return string(b), nil

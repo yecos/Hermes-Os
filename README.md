@@ -84,3 +84,18 @@ n8n and Node-RED bind to localhost by default. Change HERMES_OS_BIND in .env onl
 - Sensitive physical actions such as locks should use explicit approvals and allowlists.
 
 See docs/ARCHITECTURE.md, docs/ROADMAP.md and hermes-node/README.md.
+
+
+## ChatGPT Desktop — Hermes Commander
+
+Hermes OS includes a local ChatGPT Desktop plugin named **Hermes Commander**. It uses MCP STDIO to launch Hermes Node directly on Windows, so local computer-control tools do not require a public server.
+
+Install from a Windows clone of this repository:
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-hermes-commander-chatgpt.ps1 -FullControl
+~~~
+
+Then restart ChatGPT Desktop and enable **Hermes Commander** from the **Hermes OS** local marketplace.
+
+See `docs/CHATGPT_DESKTOP_HERMES_COMMANDER.md`.
