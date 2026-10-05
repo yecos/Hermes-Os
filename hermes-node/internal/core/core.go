@@ -43,6 +43,13 @@ func (n *Node) Config() config.Config { return n.cfg }
 func (n *Node) Device() map[string]any {
 	host, _ := os.Hostname()
 	wd, _ := os.Getwd()
+	capabilities := []string{
+		"system_status", "execute_command", "list_directory", "get_file_info", "create_directory",
+		"read_file", "read_multiple_files", "write_file", "edit_block", "move_file", "delete_path", "search_files",
+		"list_processes", "kill_process", "start_process", "read_process_output", "interact_with_process",
+		"force_terminate", "list_sessions", "logs",
+	}
+	capabilities = append(capabilities, visualCapabilities()...)
 	return map[string]any{
 		"name":              n.cfg.Name,
 		"hostname":          host,
@@ -52,15 +59,10 @@ func (n *Node) Device() map[string]any {
 		"working_directory": wd,
 		"started_at":        n.started.UTC(),
 		"uptime_seconds":    int64(time.Since(n.started).Seconds()),
-		"version":           "0.2.0",
+		"version":           "0.3.0",
 		"exec_mode":         n.cfg.ExecMode,
 		"allowed_roots":     n.cfg.AllowedRoots,
-		"capabilities": []string{
-			"system_status", "execute_command", "list_directory", "get_file_info", "create_directory",
-			"read_file", "read_multiple_files", "write_file", "edit_block", "move_file", "delete_path", "search_files",
-			"list_processes", "kill_process", "start_process", "read_process_output", "interact_with_process",
-			"force_terminate", "list_sessions", "logs",
-		},
+		"capabilities":      capabilities,
 	}
 }
 
