@@ -66,3 +66,30 @@ The local plugin now exposes the machine-control core plus Windows visual contro
 ## Visual verification loop
 
 For GUI work Hermes Commander should use: `screenshot -> inspect -> act -> screenshot -> verify`. This avoids assuming that a mouse click, window focus or application launch succeeded.
+
+
+## Hermes Commander v0.4 semantic control
+
+v0.4 adds two semantic control layers above raw pixel automation.
+
+### Windows UI Automation
+
+ChatGPT can inspect the active application's accessibility/UI Automation tree, find controls by name, AutomationId, type or class, and operate those controls through semantic element IDs. It can wait for dialogs and controls, set text through ValuePattern, invoke buttons without coordinates, and fall back to mouse/keyboard only when needed.
+
+### Managed Chrome / CDP
+
+Hermes Commander can launch a dedicated Chrome profile with DevTools bound only to localhost. ChatGPT can list tabs, read visible interactive DOM elements, click DOM elements by stable IDs, set form values, navigate tabs, read page text without OCR and capture the browser viewport directly through Chrome DevTools.
+
+Preferred browser loop:
+
+```text
+browser_snapshot
+      ↓
+browser_click / browser_set_text / browser_navigate
+      ↓
+browser_snapshot or browser_page_text
+      ↓
+browser_screenshot for visual verification
+```
+
+This keeps browser automation independent of monitor resolution and window position.
