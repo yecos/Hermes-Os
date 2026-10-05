@@ -330,12 +330,15 @@ func summaryFromDeviceMap(id, name, rawURL string, local bool, d map[string]any)
 	s.OS, _ = d["os"].(string)
 	s.Arch, _ = d["arch"].(string)
 	s.Version, _ = d["version"].(string)
-	if raw, ok := d["capabilities"].([]any); ok {
+	switch raw := d["capabilities"].(type) {
+	case []any:
 		for _, v := range raw {
 			if x, ok := v.(string); ok {
 				s.Capabilities = append(s.Capabilities, x)
 			}
 		}
+	case []string:
+		s.Capabilities = append(s.Capabilities, raw...)
 	}
 	return s
 }
