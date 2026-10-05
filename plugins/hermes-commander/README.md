@@ -48,10 +48,16 @@ Hermes Commander plugin
       v
 hermes-node.exe mcp
       |
-      +-- files
+      +-- files / search / edit
       +-- commands
+      +-- persistent terminal sessions
       +-- processes
       +-- audit
 ```
 
 The launcher reads policy from `%USERPROFILE%\.hermes-node\hermes-node.env` and never places secrets in the Git repository.
+
+
+## Hermes Commander v0.2 tool surface
+
+The local plugin currently exposes 20 MCP tools covering system inspection, one-shot commands, filesystem operations, search, surgical text edits, OS processes and persistent command sessions. This is the machine-control core needed to replace Desktop Commander for normal development and administration workflows.
