@@ -17,7 +17,9 @@ Use Hermes Commander when the user asks to inspect, modify, build, run, diagnose
 - After writes or commands that change state, verify the result.
 - Use audit logs when diagnosing what Hermes Commander previously changed.
 
-## Available v0.2 tools
+## Available v0.3 tools
+
+### System, files and terminal
 
 - `system_status`
 - `execute_command`
@@ -40,4 +42,35 @@ Use Hermes Commander when the user asks to inspect, modify, build, run, diagnose
 - `list_sessions`
 - `logs`
 
-For long-running or interactive commands, prefer `start_process` and the session tools rather than repeatedly launching one-shot commands.
+### Visual Windows control
+
+- `screenshot`
+- `list_displays`
+- `list_windows`
+- `get_active_window`
+- `open_application`
+- `focus_window`
+- `close_window`
+- `mouse_move`
+- `mouse_click`
+- `mouse_drag`
+- `mouse_scroll`
+- `key_press`
+- `hotkey`
+- `type_text`
+- `clipboard_read`
+- `clipboard_write`
+
+## Visual operating loop
+
+When the user asks to interact with the Windows GUI:
+
+1. Call `list_displays` if monitor layout is unknown.
+2. Call `screenshot` before interacting when visual state matters.
+3. Prefer `list_windows` / `focus_window` / `open_application` over blind clicking when possible.
+4. Use absolute coordinates from the latest screenshot for mouse operations.
+5. After meaningful GUI actions, call `screenshot` again and verify the visible result.
+6. Prefer keyboard shortcuts and direct window operations over coordinate clicks when they are more reliable.
+7. Do not claim an application opened, a click worked, or navigation succeeded unless it was verified through window state, process state, or a fresh screenshot.
+
+For long-running or interactive terminal commands, prefer `start_process` and the session tools.
