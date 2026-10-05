@@ -72,7 +72,9 @@ $entries += [pscustomobject]@{
     enabled = $true
 }
 
-@{ devices = $entries } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $registryPath -Encoding utf8
+$registryJson = @{ devices = $entries } | ConvertTo-Json -Depth 8
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[IO.File]::WriteAllText($registryPath, $registryJson, $utf8NoBom)
 
 # Restrict the registry to the current user on Windows. Do not print the token.
 $principal = "{0}\{1}" -f $env:USERDOMAIN, $env:USERNAME
