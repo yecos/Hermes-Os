@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -35,6 +36,7 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /v1/file", s.auth(http.HandlerFunc(s.writeFile)))
 	s.mux.Handle("GET /v1/processes", s.auth(http.HandlerFunc(s.processes)))
 	s.mux.Handle("GET /v1/logs", s.auth(http.HandlerFunc(s.logs)))
+	s.mux.Handle("POST /v1/tool/{name}", s.auth(http.HandlerFunc(s.tool)))
 }
 
 func (s *Server) Handler() http.Handler { return s.mux }
@@ -115,6 +117,43 @@ func (s *Server) processes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) logs(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	jsonOut(w, 200, s.node.Logs(limit))
+}
+
+
+func (s *Server) tool(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	if name == "" {
+		jsonOut(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "tool name is required"})
+		return
+	}
+	var args map[string]any
+	if err := decode(r, &args); err != nil {
+		jsonOut(w, http.StatusBadRequest, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	result, err := s.node.CallTool(name, args)
+	if err != nil {
+		jsonOut(w, http.StatusUnprocessableEntity, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	out := map[string]any{"ok": true}
+	if result.Text != "" {
+		out["text"] = result.Text
+	}
+	if result.Image != nil {
+		out["image"] = map[string]any{
+			"data":        base64.StdEncoding.EncodeToString(result.Image.Data),
+			"mime_type":   result.Image.MIMEType,
+			"format":      result.Image.Format,
+			"display":     result.Image.Display,
+			"left":        result.Image.Left,
+			"top":         result.Image.Top,
+			"width":       result.Image.Width,
+			"height":      result.Image.Height,
+			"captured_at": result.Image.CapturedAt,
+		}
+	}
+	jsonOut(w, http.StatusOK, out)
 }
 
 func decode(r *http.Request, v any) error {
