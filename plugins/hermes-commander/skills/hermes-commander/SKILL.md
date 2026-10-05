@@ -118,3 +118,38 @@ For an application task:
 6. Fall back to coordinates only if the app does not expose the required control through UI Automation.
 
 For long-running terminal work, prefer persistent session tools rather than repeatedly launching one-shot commands.
+
+
+## Multi-device control (v0.5)
+
+Hermes Commander can target the local machine or registered Hermes Nodes over an authenticated private HTTP transport.
+
+Management tools:
+
+- `devices_list` — list local and registered nodes with online state, OS, architecture and capabilities.
+- `device_current` — show the default target.
+- `device_select` — change the default target for subsequent tools.
+- `device_ping` — verify one node.
+- `device_add` — register a node using its private/Tailscale URL and bearer token.
+- `device_remove` — remove a remote node.
+
+Every normal Hermes tool also accepts an optional `device_id`. If omitted, the currently selected device is used.
+
+Examples of preferred behavior:
+
+```text
+devices_list
+device_select(device_id="s10")
+system_status
+execute_command(command="uname", args=["-a"])
+```
+
+or target a single action without changing the default:
+
+```text
+system_status(device_id="laptop")
+```
+
+Never print or repeat a node bearer token. The registry keeps tokens locally under `~/.hermes-node/devices.json`. Remote node URLs are restricted to loopback, private LAN, or Tailscale addresses.
+
+When a tool is unsupported by the selected platform, report that capability difference and choose an appropriate supported tool rather than silently switching devices.
