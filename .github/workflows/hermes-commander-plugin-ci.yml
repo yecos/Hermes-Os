@@ -63,7 +63,8 @@ jobs:
           $files = @(
             "plugins/hermes-commander/scripts/launch-windows.ps1",
             "scripts/install-hermes-commander-chatgpt.ps1",
-            "scripts/bootstrap-hermes-commander-chatgpt.ps1"
+            "scripts/bootstrap-hermes-commander-chatgpt.ps1",
+            "hermes-node/internal/core/semantic_windows.ps1"
           )
 
           foreach ($file in $files) {
