@@ -58,6 +58,11 @@ hermes-node.exe mcp
 The launcher reads policy from `%USERPROFILE%\.hermes-node\hermes-node.env` and never places secrets in the Git repository.
 
 
-## Hermes Commander v0.2 tool surface
+## Hermes Commander v0.3 tool surface
 
-The local plugin currently exposes 20 MCP tools covering system inspection, one-shot commands, filesystem operations, search, surgical text edits, OS processes and persistent command sessions. This is the machine-control core needed to replace Desktop Commander for normal development and administration workflows.
+The local plugin now exposes the machine-control core plus Windows visual control: desktop screenshots returned directly as MCP image content, display/window discovery, application opening, window focus/close, mouse movement/click/drag/scroll, keyboard input/hotkeys and clipboard access.
+
+
+## Visual verification loop
+
+For GUI work Hermes Commander should use: `screenshot -> inspect -> act -> screenshot -> verify`. This avoids assuming that a mouse click, window focus or application launch succeeded.

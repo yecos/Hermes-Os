@@ -10,6 +10,10 @@ on:
       - "hermes-node/**"
       - ".github/workflows/hermes-node-ci.yml"
 
+concurrency:
+  group: hermes-node-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
