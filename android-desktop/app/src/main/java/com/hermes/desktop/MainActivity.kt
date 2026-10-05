@@ -129,14 +129,69 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         }
     }
 
-    override fun onDisplayChanged(displayId: Int) = Unit
+    override fun onDisplayChanged(displayId: Int) {
+        if (shellVisible) attachBestExternalDisplay()
+    }
+
+    private fun isSamsungDexDualMode(): Boolean {
+        val desktopModeManager = applicationContext.getSystemService("desktopmode") ?: return false
+        return runCatching {
+            val state = desktopModeManager.javaClass
+                .getDeclaredMethod("getDesktopModeState")
+                .apply { isAccessible = true }
+                .invoke(desktopModeManager)
+                ?: return@runCatching false
+
+            val stateClass = state.javaClass
+            val enabled = (stateClass.getDeclaredMethod("getEnabled")
+                .apply { isAccessible = true }
+                .invoke(state) as Number).toInt()
+            val displayType = (stateClass.getDeclaredMethod("getDisplayType")
+                .apply { isAccessible = true }
+                .invoke(state) as Number).toInt()
+
+            val enabledValue = stateClass.getDeclaredField("ENABLED")
+                .apply { isAccessible = true }
+                .getInt(state)
+            val dualValue = stateClass.getDeclaredField("DISPLAY_TYPE_DUAL")
+                .apply { isAccessible = true }
+                .getInt(state)
+
+            enabled == enabledValue && displayType == dualValue
+        }.getOrDefault(false)
+    }
+
+    private fun samsungDexDesktopDisplay(): Display? =
+        runCatching {
+            displayManager
+                .getDisplays("com.samsung.android.hardware.display.category.DESKTOP")
+                .firstOrNull { display ->
+                    display.state == Display.STATE_ON &&
+                        display.displayId != Display.DEFAULT_DISPLAY
+                }
+        }.getOrNull()
+
+    private fun physicalExternalDisplay(): Display? {
+        val primaryId = windowManager.defaultDisplay.displayId
+        return displayManager.displays.firstOrNull { display ->
+            display.displayId != primaryId &&
+                display.state == Display.STATE_ON &&
+                display.type == Display.TYPE_EXTERNAL
+        } ?: displayManager.displays.firstOrNull { display ->
+            display.displayId != primaryId && display.state == Display.STATE_ON
+        }
+    }
+
+    private fun resolveHermesDesktopTarget(): Display? {
+        if (isSamsungDexDualMode()) {
+            samsungDexDesktopDisplay()?.let { return it }
+        }
+        return physicalExternalDisplay()
+    }
 
     @Suppress("DEPRECATION")
     private fun attachBestExternalDisplay(force: Boolean = false) {
-        val primaryId = windowManager.defaultDisplay.displayId
-        val target = displayManager.displays
-            .firstOrNull { it.displayId != primaryId && it.state == Display.STATE_ON }
-            ?: return
+        val target = resolveHermesDesktopTarget() ?: return
 
         if (!force && externalDisplayId == target.displayId) return
 
@@ -152,10 +207,14 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         presentation?.dismiss()
         shellView = null
         externalDisplayId = target.displayId
-        externalDisplayName = target.name
+        externalDisplayName = if (isSamsungDexDualMode()) {
+            "Hermes • DeX Desktop"
+        } else {
+            target.name
+        }
 
-        // DeX-like focus model: the phone stays touchable as a controller,
-        // but must not steal keyboard/mouse focus from the external desktop.
+        // The phone stays touchable as a controller without stealing mouse/keyboard
+        // focus from the desktop task running on the external/DeX logical display.
         window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
 
         shellVisible = true
@@ -855,7 +914,9 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
 
     private fun launchDesktopActivity(displayId: Int) {
         val intent = Intent(this, DesktopActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            // Recreate the dedicated desktop task on the requested display. Reordering
+            // an existing single task leaves it pinned to its previous DisplayContent.
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             putExtra(
                 DesktopActivity.EXTRA_MODE,
                 if (mode == DesktopMode.TV) "tv" else "desktop"
