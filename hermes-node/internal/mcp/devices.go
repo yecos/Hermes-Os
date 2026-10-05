@@ -82,6 +82,7 @@ func (m *DeviceManager) load() error {
 	if err != nil {
 		return err
 	}
+	b = bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF})
 	var f deviceRegistryFile
 	if err := json.Unmarshal(b, &f); err != nil {
 		return err
