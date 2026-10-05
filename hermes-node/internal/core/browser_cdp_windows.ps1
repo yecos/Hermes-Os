@@ -16,7 +16,14 @@ if (-not $payload.websocket_url) {
 
 $ws = [System.Net.WebSockets.ClientWebSocket]::new()
 $uri = [Uri][string]$payload.websocket_url
-$ws.ConnectAsync($uri, [Threading.CancellationToken]::None).GetAwaiter().GetResult()
+$connectCts = [Threading.CancellationTokenSource]::new()
+$connectCts.CancelAfter(5000)
+try {
+    $ws.ConnectAsync($uri, $connectCts.Token).GetAwaiter().GetResult()
+}
+finally {
+    $connectCts.Dispose()
+}
 
 $script:nextId = 1
 
@@ -37,10 +44,17 @@ function Receive-Text {
         do {
             $buffer = New-Object byte[] 65536
             $segment = [ArraySegment[byte]]::new($buffer)
-            $result = $ws.ReceiveAsync(
-                $segment,
-                [Threading.CancellationToken]::None
-            ).GetAwaiter().GetResult()
+            $receiveCts = [Threading.CancellationTokenSource]::new()
+            $receiveCts.CancelAfter(10000)
+            try {
+                $result = $ws.ReceiveAsync(
+                    $segment,
+                    $receiveCts.Token
+                ).GetAwaiter().GetResult()
+            }
+            finally {
+                $receiveCts.Dispose()
+            }
 
             if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
                 throw "Chrome DevTools websocket closed unexpectedly."
