@@ -198,3 +198,44 @@ func (n *Node) Search(req SearchRequest) ([]SearchResult, error) {
 	n.record("search_files", map[string]any{"path": root, "pattern": pattern, "type": req.SearchType, "count": len(results)}, true, nil)
 	return results, nil
 }
+
+type EditResult struct {
+	Path         string `json:"path"`
+	Replacements int    `json:"replacements"`
+}
+
+func (n *Node) EditBlock(path, oldText, newText string, expectedReplacements int) (EditResult, error) {
+	if oldText == "" {
+		return EditResult{}, errors.New("old_text is required")
+	}
+
+	content, err := n.ReadFile(path)
+	if err != nil {
+		return EditResult{}, err
+	}
+
+	count := strings.Count(content, oldText)
+	if count == 0 {
+		return EditResult{}, errors.New("old_text was not found")
+	}
+
+	if expectedReplacements <= 0 {
+		expectedReplacements = 1
+	}
+	if count != expectedReplacements {
+		return EditResult{}, fmt.Errorf("expected %d replacement(s), found %d", expectedReplacements, count)
+	}
+
+	updated := strings.Replace(content, oldText, newText, expectedReplacements)
+	if err := n.WriteFile(path, updated, false); err != nil {
+		return EditResult{}, err
+	}
+
+	resolved, _ := n.ResolvePath(path)
+	result := EditResult{Path: resolved, Replacements: expectedReplacements}
+	n.record("edit_block", map[string]any{
+		"path":         resolved,
+		"replacements": expectedReplacements,
+	}, true, nil)
+	return result, nil
+}
