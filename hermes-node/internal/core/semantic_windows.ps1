@@ -229,7 +229,7 @@ function Resolve-Element($token) {
 }
 
 function Emit($value) {
-    $value | ConvertTo-Json -Compress -Depth 8
+    ConvertTo-Json -InputObject $value -Compress -Depth 8
 }
 
 switch ($Action) {
@@ -258,7 +258,7 @@ switch ($Action) {
         $maxDepth = if ($payload.max_depth) { [Math]::Min([Math]::Max([int]$payload.max_depth, 1), 32) } else { 16 }
         $maxResults = if ($payload.max_results) { [Math]::Min([Math]::Max([int]$payload.max_results, 1), 200) } else { 20 }
         $elements = Walk-Elements $root $rootRef $maxDepth $maxResults $payload
-        Emit @($elements)
+        Emit ([object[]]$elements)
     }
 
     "invoke" {
