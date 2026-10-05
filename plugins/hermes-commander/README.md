@@ -93,3 +93,29 @@ browser_screenshot for visual verification
 ```
 
 This keeps browser automation independent of monitor resolution and window position.
+
+
+## Hermes Commander v0.5 multi-device
+
+v0.5 turns one ChatGPT Desktop plugin into a private control plane for multiple Hermes Nodes.
+
+```text
+ChatGPT Desktop
+      |
+Hermes Commander MCP
+      |
+  Device Manager
+  /          \
+local       Tailscale
+YECO          |
+          +---+---+
+          |       |
+        S10    Laptop
+       Android  Windows/Linux
+```
+
+The selected device is persistent for the lifetime of the MCP session, and every normal tool also accepts an optional `device_id` override.
+
+Remote nodes expose the same canonical tool dispatcher through `POST /v1/tool/{name}`, protected by a bearer token and an optional source-CIDR allowlist. Node registration accepts only loopback, private LAN, or Tailscale URLs.
+
+The S10 Termux deployment uses an Android/arm64 Hermes Node, listens on port 9090, allows remote source addresses only from Tailscale's `100.64.0.0/10` range, and starts through Termux:Boot. Pairing from Windows can use `scripts/register-hermes-node-from-ssh.ps1`, which transfers the existing node token through an authorized SSH connection without printing it.
