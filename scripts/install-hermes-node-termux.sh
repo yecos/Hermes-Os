@@ -1,13 +1,13 @@
 #!/data/data/com.termux/files/usr/bin/sh
 set -eu
 
-SOURCE_BINARY="\${1:-}"
+SOURCE_BINARY="${1:-}"
 if [ -z "$SOURCE_BINARY" ] || [ ! -f "$SOURCE_BINARY" ]; then
   echo "usage: $0 /path/to/hermes-node-android-arm64" >&2
   exit 2
 fi
 
-HOME_DIR="\${HOME:-/data/data/com.termux/files/home}"
+HOME_DIR="${HOME:-/data/data/com.termux/files/home}"
 INSTALL_DIR="$HOME_DIR/.local/bin"
 CONFIG_DIR="$HOME_DIR/.hermes-node"
 CONFIG_FILE="$CONFIG_DIR/hermes-node.env"
@@ -57,7 +57,7 @@ fi
 
 cat > "$BOOT_SCRIPT" <<'EOF'
 #!/data/data/com.termux/files/usr/bin/sh
-HOME_DIR="\${HOME:-/data/data/com.termux/files/home}"
+HOME_DIR="${HOME:-/data/data/com.termux/files/home}"
 CONFIG_FILE="$HOME_DIR/.hermes-node/hermes-node.env"
 BIN="$HOME_DIR/.local/bin/hermes-node"
 LOG="$HOME_DIR/.hermes-node/server.log"
