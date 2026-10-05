@@ -1,0 +1,99 @@
+name: Hermes Commander Plugin CI
+
+on:
+  push:
+    paths:
+      - ".agents/plugins/**"
+      - "plugins/hermes-commander/**"
+      - "scripts/install-hermes-commander-chatgpt.ps1"
+      - ".github/workflows/hermes-commander-plugin-ci.yml"
+  pull_request:
+    paths:
+      - ".agents/plugins/**"
+      - "plugins/hermes-commander/**"
+      - "scripts/install-hermes-commander-chatgpt.ps1"
+      - ".github/workflows/hermes-commander-plugin-ci.yml"
+
+jobs:
+  validate-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON manifests
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          files = [
+              Path(".agents/plugins/marketplace.json"),
+              Path("plugins/hermes-commander/.codex-plugin/plugin.json"),
+              Path("plugins/hermes-commander/.mcp.json"),
+          ]
+
+          for path in files:
+              with path.open("r", encoding="utf-8") as f:
+                  json.load(f)
+              print(f"valid: {path}")
+
+          marketplace = json.loads(Path(".agents/plugins/marketplace.json").read_text())
+          plugin = marketplace["plugins"][0]
+          assert plugin["name"] == "hermes-commander"
+          assert plugin["source"]["path"] == "./plugins/hermes-commander"
+
+          manifest = json.loads(Path("plugins/hermes-commander/.codex-plugin/plugin.json").read_text())
+          assert manifest["mcpServers"] == "./.mcp.json"
+
+          mcp = json.loads(Path("plugins/hermes-commander/.mcp.json").read_text())
+          server = mcp["mcpServers"]["hermes_commander"]
+          assert server["command"].lower() == "powershell.exe"
+          assert server["cwd"] == "."
+
+  validate-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $files = @(
+            "plugins/hermes-commander/scripts/launch-windows.ps1",
+            "scripts/install-hermes-commander-chatgpt.ps1"
+          )
+
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+
+            if ($errors.Count -gt 0) {
+              $errors | Format-List | Out-String | Write-Error
+              exit 1
+            }
+
+            Write-Host "valid: $file"
+          }
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache-dependency-path: hermes-node/go.mod
+
+      - name: Test and build Hermes Node for plugin
+        shell: pwsh
+        working-directory: hermes-node
+        run: |
+          go test ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          go build -o "$env:RUNNER_TEMP\hermes-node.exe" ./cmd/hermes-node
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          & "$env:RUNNER_TEMP\hermes-node.exe" status
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
