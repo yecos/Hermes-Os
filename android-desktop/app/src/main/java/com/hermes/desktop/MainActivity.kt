@@ -90,8 +90,10 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
     override fun onResume() {
         super.onResume()
         displayManager.registerDisplayListener(this, null)
-        if (shellVisible) attachBestExternalDisplay()
+        // Stop Hermes' virtual mouse before launching onto DeX so Samsung keeps
+        // the physical mouse as the active pointer device.
         syncMouseBackendForCurrentMode()
+        if (shellVisible) attachBestExternalDisplay()
         setContentView(phoneController())
     }
 
@@ -109,7 +111,10 @@ class MainActivity : Activity(), DisplayManager.DisplayListener {
         super.onDestroy()
     }
 
-    override fun onDisplayAdded(displayId: Int) = attachBestExternalDisplay()
+    override fun onDisplayAdded(displayId: Int) {
+        syncMouseBackendForCurrentMode()
+        attachBestExternalDisplay()
+    }
 
     override fun onDisplayRemoved(displayId: Int) {
         if (externalDisplayId == displayId) {
