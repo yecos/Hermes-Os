@@ -56,7 +56,7 @@ class DesktopActivity : Activity() {
             "HermesMouseTrace",
             "stage=$stage action=${MotionEvent.actionToString(event.actionMasked)} " +
                 "display=${display?.displayId ?: -1} source=0x${event.source.toString(16)} " +
-                "deviceId=${event.deviceId} device=${event.device?.name ?: \"unknown\"} " +
+                "deviceId=${event.deviceId} device=${event.device?.name ?: "unknown"} " +
                 "x=${event.x.toInt()} y=${event.y.toInt()} buttons=${event.buttonState} " +
                 "vscroll=${event.getAxisValue(MotionEvent.AXIS_VSCROLL)} " +
                 "hscroll=${event.getAxisValue(MotionEvent.AXIS_HSCROLL)}"
