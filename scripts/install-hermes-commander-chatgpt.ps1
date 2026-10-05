@@ -23,7 +23,26 @@ if (-not (Test-Path -LiteralPath (Join-Path $nodeRoot "go.mod"))) {
 }
 
 Require-Command "go" "Install Go 1.23 or newer, then run this installer again."
-Require-Command "codex" "Install/update ChatGPT Desktop/Codex CLI so the codex command is available."
+
+if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
+    Require-Command "npm" "Install Node.js/npm, then run this installer again."
+    Write-Host "Codex CLI was not found. Installing the official @openai/codex package..."
+    & npm install -g "@openai/codex@latest"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Codex CLI installation failed."
+    }
+
+    $npmGlobalBin = Join-Path $env:APPDATA "npm"
+    if (Test-Path -LiteralPath $npmGlobalBin) {
+        $env:PATH = "$npmGlobalBin;$env:PATH"
+    }
+
+    if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
+        throw "Codex was installed but is not visible on PATH. Close and reopen PowerShell, then run the installer again."
+    }
+}
+
+Write-Host "Codex CLI: $(& codex --version)"
 
 New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $configRoot | Out-Null
@@ -47,8 +66,14 @@ finally {
 
 if (-not (Test-Path -LiteralPath $configFile)) {
     $bytes = New-Object byte[] 32
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-    $token = [Convert]::ToHexString($bytes).ToLowerInvariant()
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($bytes)
+    }
+    finally {
+        $rng.Dispose()
+    }
+    $token = -join ($bytes | ForEach-Object { $_.ToString("x2") })
 
     $mode = if ($FullControl) { "admin" } else { "restricted" }
     $allowed = "git,docker,hermes,adb,ping,ipconfig,where,tasklist,taskkill,go,node,npm,npx,pnpm,python,py,curl,tailscale"
@@ -100,17 +125,19 @@ if ($LASTEXITCODE -ne 0) {
     & codex plugin marketplace list --json
 }
 
-Write-Host "Installing Hermes Commander plugin..."
-& codex plugin add "hermes-commander@hermes-os" --json
-if ($LASTEXITCODE -ne 0) {
-    Write-Warning "Plugin add returned an error. Checking installed plugins."
-    & codex plugin list --json
-}
+Write-Host ""
+Write-Host "Hermes Commander local marketplace is registered."
+Write-Host "Local plugins are installed/enabled from the ChatGPT Desktop Plugins Directory."
 
 Write-Host ""
-Write-Host "Hermes Commander installation completed."
+Write-Host "Hermes Commander preparation completed."
 Write-Host "Binary: $binary"
 Write-Host "Policy: $configFile"
 Write-Host "Mode: $(if ($FullControl) { 'admin/full control' } else { 'restricted' })"
 Write-Host ""
-Write-Host "Restart ChatGPT Desktop, open Plugins, enable Hermes Commander, and start a new chat."
+Write-Host "NEXT:"
+Write-Host "1. Fully close and reopen ChatGPT Desktop."
+Write-Host "2. Open Plugins."
+Write-Host "3. Select the local marketplace: Hermes OS."
+Write-Host "4. Install/enable Hermes Commander."
+Write-Host "5. Start a new chat and ask: Use Hermes Commander and show system status."
