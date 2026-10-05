@@ -42,6 +42,10 @@ class DesktopActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        window.clearFlags(
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        )
         window.statusBarColor = Color.rgb(7, 12, 22)
         window.navigationBarColor = Color.rgb(7, 12, 22)
         window.setFlags(
@@ -138,8 +142,11 @@ class DesktopActivity : Activity() {
                 handleTaskAction(task, action)
             }
         )
+        shellView.isFocusable = true
+        shellView.isFocusableInTouchMode = true
         setContentView(shellView)
         shellView.post {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
             shellView.requestFocus()
             handler.removeCallbacks(taskRefresh)
             handler.post(taskRefresh)
