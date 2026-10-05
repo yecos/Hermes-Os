@@ -10,8 +10,8 @@ android {
         applicationId = "com.hermes.desktop"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "0.8.0"
+        versionCode = 16
+        versionName = "0.9.0"
     }
 
     buildFeatures {
