@@ -45,3 +45,22 @@ func (n *Node) BrowserTabs() ([]BrowserTab, error) {
 func (n *Node) BrowserOpenTab(string) (BrowserTab, error) {
 	return BrowserTab{}, n.visualUnsupported("browser_open_tab")
 }
+
+func (n *Node) BrowserSnapshot(string, int) (BrowserSnapshot, error) {
+	return BrowserSnapshot{}, n.visualUnsupported("browser_snapshot")
+}
+func (n *Node) BrowserClick(string, string) (BrowserActionResult, error) {
+	return BrowserActionResult{}, n.visualUnsupported("browser_click")
+}
+func (n *Node) BrowserSetText(string, string, string) (BrowserActionResult, error) {
+	return BrowserActionResult{}, n.visualUnsupported("browser_set_text")
+}
+func (n *Node) BrowserNavigate(string, string) (BrowserActionResult, error) {
+	return BrowserActionResult{}, n.visualUnsupported("browser_navigate")
+}
+func (n *Node) BrowserPageText(string, int) (BrowserPageText, error) {
+	return BrowserPageText{}, n.visualUnsupported("browser_page_text")
+}
+func (n *Node) BrowserScreenshot(string, string, int) (Screenshot, error) {
+	return Screenshot{}, n.visualUnsupported("browser_screenshot")
+}
