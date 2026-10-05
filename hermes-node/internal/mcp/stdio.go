@@ -23,7 +23,7 @@ type response struct {
 	Error   *rpcError `json:"error,omitempty"`
 }
 type rpcError struct {
-	Code  ( int    `json:"code"`
+	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    any    `json:"data,omitempty"`
 }
