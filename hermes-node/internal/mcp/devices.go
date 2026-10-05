@@ -429,3 +429,68 @@ func (m *DeviceManager) Call(name string, args map[string]any) (core.ToolCallRes
 	}
 	return out, target, nil
 }
+
+
+func (s *Server) handleMultiDeviceCall(name string, args map[string]any) map[string]any {
+	if args == nil {
+		args = map[string]any{}
+	}
+
+	switch name {
+	case "devices_list":
+		return toolResult(core.JSON(s.devices.List()), false)
+
+	case "device_current":
+		return toolResult(core.JSON(s.devices.Current()), false)
+
+	case "device_select":
+		v, err := s.devices.Select(stringArg(args, "device_id"))
+		if err != nil {
+			return toolResult(err.Error(), true)
+		}
+		return toolResult(core.JSON(v), false)
+
+	case "device_ping":
+		v, err := s.devices.Ping(stringArg(args, "device_id"))
+		if err != nil {
+			return toolResult(err.Error(), true)
+		}
+		return toolResult(core.JSON(v), false)
+
+	case "device_add":
+		v, err := s.devices.Add(
+			stringArg(args, "device_id"),
+			stringArg(args, "name"),
+			stringArg(args, "url"),
+			stringArg(args, "token"),
+		)
+		if err != nil {
+			return toolResult(err.Error(), true)
+		}
+		return toolResult(core.JSON(v), false)
+
+	case "device_remove":
+		if err := s.devices.Remove(stringArg(args, "device_id")); err != nil {
+			return toolResult(err.Error(), true)
+		}
+		return toolResult("ok", false)
+	}
+
+	result, target, err := s.devices.Call(name, args)
+	if err != nil {
+		return toolResult(fmt.Sprintf("device %s: %v", target, err), true)
+	}
+	if result.Image != nil {
+		mapped := screenshotToolResult(*result.Image)
+		if content, ok := mapped["content"].([]map[string]any); ok && len(content) > 0 {
+			if meta, ok := content[0]["text"].(string); ok {
+				content[0]["text"] = fmt.Sprintf("{\"device_id\":%q,\"image\":%s}", target, meta)
+			}
+		}
+		return mapped
+	}
+	if strings.TrimSpace(result.Text) == "" {
+		result.Text = "ok"
+	}
+	return toolResult(fmt.Sprintf("device=%s\n%s", target, result.Text), false)
+}
