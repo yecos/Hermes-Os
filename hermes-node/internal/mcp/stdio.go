@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -82,12 +83,15 @@ func (s *Server) handle(req request) response {
 		res.Result = map[string]any{
 			"protocolVersion": "2025-11-25",
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "hermes-commander", "version": "0.2.0"},
+			"serverInfo":      map[string]any{"name": "hermes-commander", "version": "0.3.0"},
 		}
+
 	case "ping":
 		res.Result = map[string]any{}
+
 	case "tools/list":
 		res.Result = map[string]any{"tools": tools()}
+
 	case "tools/call":
 		var p struct {
 			Name      string         `json:"name"`
@@ -96,12 +100,28 @@ func (s *Server) handle(req request) response {
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return fail(req.ID, -32602, err.Error())
 		}
+
+		if p.Name == "screenshot" {
+			shot, err := s.node.Screenshot(core.ScreenshotRequest{
+				Display: intArg(p.Arguments, "display", -1),
+				Format:  stringArg(p.Arguments, "format"),
+				Quality: intArg(p.Arguments, "quality", 82),
+			})
+			if err != nil {
+				res.Result = toolResult(err.Error(), true)
+			} else {
+				res.Result = screenshotToolResult(shot)
+			}
+			break
+		}
+
 		text, err := s.call(p.Name, p.Arguments)
 		if err != nil {
 			res.Result = toolResult(err.Error(), true)
 		} else {
 			res.Result = toolResult(text, false)
 		}
+
 	default:
 		return fail(req.ID, -32601, "method not found")
 	}
@@ -113,6 +133,29 @@ func toolResult(text string, isErr bool) map[string]any {
 	return map[string]any{
 		"content": []map[string]any{{"type": "text", "text": text}},
 		"isError": isErr,
+	}
+}
+
+func screenshotToolResult(shot core.Screenshot) map[string]any {
+	meta := map[string]any{
+		"display":     shot.Display,
+		"left":        shot.Left,
+		"top":         shot.Top,
+		"width":       shot.Width,
+		"height":      shot.Height,
+		"format":      shot.Format,
+		"captured_at": shot.CapturedAt,
+	}
+	return map[string]any{
+		"content": []map[string]any{
+			{"type": "text", "text": core.JSON(meta)},
+			{
+				"type":     "image",
+				"data":     base64.StdEncoding.EncodeToString(shot.Data),
+				"mimeType": shot.MIMEType,
+			},
+		},
+		"isError": false,
 	}
 }
 
@@ -288,6 +331,106 @@ func (s *Server) call(name string, a map[string]any) (string, error) {
 	case "logs":
 		return core.JSON(s.node.Logs(intArg(a, "limit", 50))), nil
 
+	case "list_displays":
+		v, err := s.node.Displays()
+		return core.JSON(v), err
+
+	case "list_windows":
+		v, err := s.node.Windows()
+		return core.JSON(v), err
+
+	case "get_active_window":
+		v, err := s.node.ActiveWindow()
+		return core.JSON(v), err
+
+	case "open_application":
+		err := s.node.OpenApplication(core.OpenApplicationRequest{
+			Target:     stringArg(a, "target"),
+			Parameters: stringArg(a, "parameters"),
+			Dir:        stringArg(a, "dir"),
+		})
+		if err != nil {
+			return "", err
+		}
+		return "ok", nil
+
+	case "focus_window":
+		v, err := s.node.FocusWindow(stringArg(a, "window"))
+		return core.JSON(v), err
+
+	case "close_window":
+		err := s.node.CloseWindow(stringArg(a, "window"))
+		if err != nil {
+			return "", err
+		}
+		return "ok", nil
+
+	case "mouse_move":
+		err := s.node.MouseMove(intArg(a, "x", 0), intArg(a, "y", 0))
+		if err != nil {
+			return "", err
+		}
+		return "ok", nil
+
+	case "mouse_click":
+		err := s.node.MouseClick(stringArg(a, "button"), intArg(a, "count", 1))
+		if err != nil {
+			return "", err
+		}
+		return "ok", nil
+
+	case "mouse_drag":
+		err := s.node.MouseDrag(core.MouseDragRequest{
+			StartX: intArg(a, "start_x", 0),
+			StartY: intArg(a, "start_y", 0),
+			EndX:   intArg(a, "end_x", 0),
+			EndY:   intArg(a, "end_y", 0),
+			Button: stringArg(a, "button"),
+			Steps:  intArg(a, "steps", 12),
+		})
+		if err != nil {
+			return "", err
+		}
+		return "ok", nil
+
+	case "mouse_scroll":
+		err := s.node.MouseScroll(intArg(a, "delta", 0))
+		if err != nil {
+			return "", err
+		}
+		return "ok", nil
+
+	case "key_press":
+		err := s.node.KeyPress(stringArg(a, "key"))
+		if err != nil {
+			return "", err
+		}
+		return "ok", nil
+
+	case "hotkey":
+		err := s.node.Hotkey(stringSliceArg(a, "keys"))
+		if err != nil {
+			return "", err
+		}
+		return "ok", nil
+
+	case "type_text":
+		err := s.node.TypeText(stringArg(a, "text"))
+		if err != nil {
+			return "", err
+		}
+		return "ok", nil
+
+	case "clipboard_read":
+		return s.node.ClipboardRead()
+
+	case "clipboard_write":
+		err := s.node.ClipboardWrite(stringArg(a, "text"))
+		if err != nil {
+			return "", err
+		}
+		return "ok", nil
+
 	default:
 		return "", fmt.Errorf("unknown tool %q", name)
 	}
@@ -312,7 +455,7 @@ func tools() []map[string]any {
 		return map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
 	}
 
-	return []map[string]any{
+	base := []map[string]any{
 		{
 			"name":        "system_status",
 			"description": "Return Hermes Commander device status, policy and capabilities.",
@@ -449,4 +592,105 @@ func tools() []map[string]any {
 			}),
 		},
 	}
+
+	visual := []map[string]any{
+		{
+			"name":        "screenshot",
+			"description": "Capture the Windows desktop as an image the model can inspect. Use display=-1 for the complete virtual desktop or a display index from list_displays.",
+			"inputSchema": schema(map[string]any{
+				"display": map[string]any{"type": "integer", "minimum": -1},
+				"format":  map[string]any{"type": "string", "enum": []string{"jpeg", "png"}},
+				"quality": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
+			}),
+		},
+		{
+			"name":        "list_displays",
+			"description": "List Windows monitors and their virtual-desktop coordinates.",
+			"inputSchema": schema(map[string]any{}),
+		},
+		{
+			"name":        "list_windows",
+			"description": "List visible top-level Windows windows with title, PID, handle and screen bounds.",
+			"inputSchema": schema(map[string]any{}),
+		},
+		{
+			"name":        "get_active_window",
+			"description": "Return the currently foreground Windows window.",
+			"inputSchema": schema(map[string]any{}),
+		},
+		{
+			"name":        "open_application",
+			"description": "Open an application, file, folder or URL through the Windows shell.",
+			"inputSchema": schema(map[string]any{
+				"target":     stringType(),
+				"parameters": stringType(),
+				"dir":        stringType(),
+			}, "target"),
+		},
+		{
+			"name":        "focus_window",
+			"description": "Bring a visible window to the foreground by hexadecimal handle or partial title.",
+			"inputSchema": schema(map[string]any{"window": stringType()}, "window"),
+		},
+		{
+			"name":        "close_window",
+			"description": "Request a visible window to close cleanly by hexadecimal handle or partial title.",
+			"inputSchema": schema(map[string]any{"window": stringType()}, "window"),
+		},
+		{
+			"name":        "mouse_move",
+			"description": "Move the Windows mouse pointer to absolute virtual-desktop coordinates.",
+			"inputSchema": schema(map[string]any{"x": intType(), "y": intType()}, "x", "y"),
+		},
+		{
+			"name":        "mouse_click",
+			"description": "Click the current mouse position with the left, right or middle button.",
+			"inputSchema": schema(map[string]any{
+				"button": map[string]any{"type": "string", "enum": []string{"left", "right", "middle"}},
+				"count":  map[string]any{"type": "integer", "minimum": 1, "maximum": 3},
+			}),
+		},
+		{
+			"name":        "mouse_drag",
+			"description": "Drag between two absolute virtual-desktop coordinates.",
+			"inputSchema": schema(map[string]any{
+				"start_x": intType(), "start_y": intType(),
+				"end_x": intType(), "end_y": intType(),
+				"button": map[string]any{"type": "string", "enum": []string{"left", "right", "middle"}},
+				"steps":  map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
+			}, "start_x", "start_y", "end_x", "end_y"),
+		},
+		{
+			"name":        "mouse_scroll",
+			"description": "Scroll the mouse wheel. Positive values scroll up and negative values scroll down; each unit is one wheel notch.",
+			"inputSchema": schema(map[string]any{"delta": intType()}, "delta"),
+		},
+		{
+			"name":        "key_press",
+			"description": "Press and release one named keyboard key.",
+			"inputSchema": schema(map[string]any{"key": stringType()}, "key"),
+		},
+		{
+			"name":        "hotkey",
+			"description": "Press a keyboard shortcut such as [CTRL,L] or [ALT,TAB].",
+			"inputSchema": schema(map[string]any{"keys": stringArray()}, "keys"),
+		},
+		{
+			"name":        "type_text",
+			"description": "Type Unicode text into the currently focused Windows control.",
+			"inputSchema": schema(map[string]any{"text": stringType()}, "text"),
+		},
+		{
+			"name":        "clipboard_read",
+			"description": "Read Unicode text currently stored in the Windows clipboard.",
+			"inputSchema": schema(map[string]any{}),
+		},
+		{
+			"name":        "clipboard_write",
+			"description": "Replace the Windows clipboard with Unicode text.",
+			"inputSchema": schema(map[string]any{"text": stringType()}, "text"),
+		},
+	}
+
+	return append(base, visual...)
 }
