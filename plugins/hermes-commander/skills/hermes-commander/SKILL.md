@@ -17,14 +17,27 @@ Use Hermes Commander when the user asks to inspect, modify, build, run, diagnose
 - After writes or commands that change state, verify the result.
 - Use audit logs when diagnosing what Hermes Commander previously changed.
 
-## Available v0.1 tools
+## Available v0.2 tools
 
 - `system_status`
 - `execute_command`
 - `list_directory`
+- `get_file_info`
+- `create_directory`
 - `read_file`
+- `read_multiple_files`
 - `write_file`
+- `edit_block`
+- `move_file`
+- `delete_path`
+- `search_files`
 - `list_processes`
+- `kill_process`
+- `start_process`
+- `read_process_output`
+- `interact_with_process`
+- `force_terminate`
+- `list_sessions`
 - `logs`
 
-The tool set will expand as Hermes Node gains Desktop Commander parity.
+For long-running or interactive commands, prefer `start_process` and the session tools rather than repeatedly launching one-shot commands.
