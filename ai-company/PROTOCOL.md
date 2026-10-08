@@ -4,6 +4,27 @@
 
 Convertir una petición natural recibida mediante Telegram en una serie de tareas trazables, implementaciones aisladas, dos revisiones independientes y un enlace de prueba. Solo el propietario humano puede autorizar una publicación concreta.
 
+## Integración con Hermes Commander existente
+
+**Decisión de arquitectura:** reutilizar Hermes Commander y Hermes Node, ya implementados en este repositorio, como plano de ejecución en Windows. No crear un segundo sistema de control de escritorio ni exigir Remote Desktop Commander para usar Hermes AI Company.
+
+- **Hermes Agent + gateway Telegram:** recepción de instrucciones del propietario y coordinación persistente. Debe poder operar sin ChatGPT Desktop abierto; su servicio y workers requieren proceso permanentemente activo.
+- **AI Company (módulo nuevo):** estado de tareas y proyectos, reglas de dos revisores, escalamiento, auditoría y permisos. La ejecución de modelos se conectará aquí por adaptadores.
+- **Hermes Node:** herramientas nativas para comandos, ficheros, procesos, navegador y UI donde estén disponibles; servicio en el host del ejecutor, con políticas restringidas para los agentes constructores.
+- **Hermes Commander:** complemento MCP local en ChatGPT Desktop para instalar, inspeccionar y reparar el sistema en YECO; no es por sí mismo una cola persistente ni un bot de Telegram.
+- **Remote Desktop Commander:** conexión externa opcional. Su estado «Offline» no demuestra que Hermes Commander local esté inoperativo.
+- **GitHub/Neon/Vercel:** código y PR, memoria duradera y estados de trabajo (tras migración), previews. Producción requiere aprobación humana fuera de la IA.
+
+### Integración y prueba inicial
+
+1. En YECO, verificar que Hermes Commander esté habilitado en ChatGPT Desktop y que `system_status` / `devices_list` respondan; inspeccionar sin habilitar privilegios de administrador innecesarios.
+2. Verificar que Hermes Node y el Hermes Agent gateway existente puedan comunicarse localmente, y que Telegram esté autenticado para el propietario.
+3. Conectar el motor `ai-company/company.py` al gateway usando un adaptador de comandos restringidos: crear proyecto, agregar tareas y consultar estado. Mantener cualquier aprobación de despliegue fuera del alcance del modelo.
+4. Crear un servicio o worker independiente de ChatGPT Desktop para que trabajos autorizados continúen ejecutándose cuando la aplicación de escritorio se cierre.
+5. Probar de extremo a extremo primero en un proyecto demo, sin tocar datos ni desplegar producción.
+
+**Seguridad:** las opciones `-FullControl` y `admin` de Hermes Commander conceden ejecución amplia; no transferir esos permisos a los seis agentes. Usar políticas de menor privilegio, raíces de trabajo acotadas, allowlist de comandos y secretos gestionados fuera del repositorio.
+
 ## Autoridad de los agentes
 
 1. **Director:** interpreta instrucciones, crea el documento maestro PROJECT.md, controla prioridades, costos y avance. Es el único que normalmente escribe al propietario por Telegram. No puede dispensar revisiones ni publicar por su cuenta.
