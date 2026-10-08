@@ -206,6 +206,18 @@ class Company:
             (project_id,))]
         return {"project": project, "tasks": tasks, "approvals": approvals}
 
+    def events(self, project_id: str) -> list[dict]:
+        """Return the immutable audit trail for a project in creation order."""
+        self._row("projects", project_id)
+        return [
+            dict(row)
+            for row in self.db.execute(
+                "SELECT id,actor,kind,payload,created_at FROM events "
+                "WHERE project_id=? ORDER BY id",
+                (project_id,),
+            )
+        ]
+
 
 def main():
     p = argparse.ArgumentParser(description="Hermes AI Company task engine (no AI execution yet)")

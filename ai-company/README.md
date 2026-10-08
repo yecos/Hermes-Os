@@ -6,7 +6,17 @@ Módulo experimental aislado dentro de Hermes OS. El propietario utilizará **un
 
 **Implementado y probado localmente:** motor de proyectos, tareas, bitácora de eventos, evidencia obligatoria, revisión funcional y técnica por separado, escalamiento por errores y solicitudes de aprobación ligadas al SHA exacto de un commit. Usa SQLite únicamente para este prototipo inicial.
 
-**Pendiente:** conexión real con Telegram/Hermes Gateway, ejecución de los seis agentes y sus modelos, Neon, Git worktrees, CI, Vercel y despliegue. **Nada de esto está conectado o ejecutándose todavía.** La aprobación del prototipo nunca publica código.
+**Fase 2 en desarrollo:** `phase2.py` añade el primer bridge verificable desde
+una sesión real del gateway: valida los metadatos de un DM Telegram contra una
+allowlist, deduplica el mensaje, enlaza IDs reales de `delegate_task`, verifica
+el commit producido por un constructor, vuelve a ejecutar las pruebas y exige
+revisiones Product/Architect independientes ligadas al mismo SHA. Consulta
+[`PHASE-2-NATIVE-RUNBOOK.md`](PHASE-2-NATIVE-RUNBOOK.md).
+
+**Todavía pendiente:** servicio duradero para reanudar delegaciones tras un
+reinicio, seis perfiles/modelos completos, Neon, gestión automática de
+worktrees, previews y despliegue. La aprobación del prototipo nunca publica
+código.
 
 ### Prueba local
 
@@ -51,3 +61,7 @@ Los tres constructores no pueden aprobar su propia tarea. Una entrega solo se co
 5. Previews Vercel, aprobación humana de una versión concreta y ejecutor de publicación controlado.
 
 Consulta el [protocolo de operación](PROTOCOL.md) para reglas de autoridad, estados y escalamiento.
+
+El primer tracer bullet de los pasos 1–2 está documentado en el
+[runbook de delegación nativa](PHASE-2-NATIVE-RUNBOOK.md); no debe confundirse
+con la operación duradera de los seis roles.
