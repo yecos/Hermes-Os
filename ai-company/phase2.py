@@ -10,17 +10,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import subprocess
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
 from company import BUILDERS, REVIEWERS, Company, WorkflowError, now
 
 COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+DELEGATION_ID = re.compile(r"^deleg_[0-9a-f]{8}$")
+_GATEWAY_AUTHORITY = object()
+_DELEGATION_AUTHORITY = object()
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,83 @@ class TelegramEnvelope:
     chat_id: str
     message_id: str
     text: str
+    _authority: object = field(default=None, repr=False, compare=False)
+
+    @classmethod
+    def from_gateway_environment(cls, text: str) -> "TelegramEnvelope":
+        """Build an envelope only from gateway-bound session metadata."""
+        values = {
+            "platform": os.environ.get("HERMES_SESSION_PLATFORM", ""),
+            "chat_type": os.environ.get("HERMES_SESSION_CHAT_TYPE", ""),
+            "user_id": os.environ.get("HERMES_SESSION_USER_ID", ""),
+            "chat_id": os.environ.get("HERMES_SESSION_CHAT_ID", ""),
+            "message_id": os.environ.get("HERMES_SESSION_MESSAGE_ID", ""),
+        }
+        if any(not value.strip() for value in values.values()):
+            raise WorkflowError("Gateway session metadata is incomplete")
+        return cls(text=text, _authority=_GATEWAY_AUTHORITY, **values)
+
+
+@dataclass(frozen=True)
+class HermesDelegationReceipt:
+    """Read-only proof that an ID exists in Hermes' durable delegation ledger."""
+
+    delegation_id: str
+    state: str
+    registry_path: str
+    _authority: object = field(default=None, repr=False, compare=False)
+
+    @staticmethod
+    def default_registry_path() -> Path:
+        if os.environ.get("HERMES_HOME"):
+            return Path(os.environ["HERMES_HOME"]) / "state.db"
+        if os.environ.get("LOCALAPPDATA"):
+            return Path(os.environ["LOCALAPPDATA"]) / "hermes" / "state.db"
+        return Path.home() / ".hermes" / "state.db"
+
+    @classmethod
+    def from_registry(
+        cls,
+        delegation_id: str,
+        registry_path: str | Path | None = None,
+        *,
+        require_completed: bool = False,
+    ) -> "HermesDelegationReceipt":
+        if not DELEGATION_ID.fullmatch(delegation_id):
+            raise WorkflowError("Invalid Hermes delegation ID format")
+        path = Path(registry_path or cls.default_registry_path()).resolve()
+        if not path.is_file():
+            raise WorkflowError("Hermes delegation registry does not exist")
+        try:
+            db = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+            try:
+                row = db.execute(
+                    "SELECT state FROM async_delegations WHERE delegation_id=?",
+                    (delegation_id,),
+                ).fetchone()
+            finally:
+                db.close()
+        except sqlite3.Error as exc:
+            raise WorkflowError(f"Could not verify Hermes delegation receipt: {exc}") from exc
+        if row is None:
+            raise WorkflowError("Delegation ID is not present in Hermes' durable registry")
+        state = str(row[0])
+        if state not in {"running", "completed"}:
+            raise WorkflowError(f"Hermes delegation is not usable (state={state})")
+        if require_completed and state != "completed":
+            raise WorkflowError("Hermes delegation has not completed")
+        return cls(delegation_id, state, str(path), _DELEGATION_AUTHORITY)
+
+    def assert_valid(self, *, require_completed: bool = False) -> None:
+        if self._authority is not _DELEGATION_AUTHORITY:
+            raise WorkflowError("Unverified Hermes delegation receipt")
+        current = self.from_registry(
+            self.delegation_id,
+            self.registry_path,
+            require_completed=require_completed,
+        )
+        if require_completed and current.state != "completed":
+            raise WorkflowError("Hermes delegation has not completed")
 
 
 class _Phase2Store:
@@ -73,6 +154,8 @@ class _Phase2Store:
                 created_at TEXT NOT NULL,
                 PRIMARY KEY (run_id, reviewer)
             );
+            CREATE UNIQUE INDEX IF NOT EXISTS one_active_native_run_per_task
+                ON native_runs(task_id) WHERE status='working';
             """
         )
         self.db.commit()
@@ -96,6 +179,8 @@ class TelegramDirectorBridge(_Phase2Store):
         builder_role: str,
         acceptance_criteria: str,
     ) -> tuple[str, str]:
+        if envelope._authority is not _GATEWAY_AUTHORITY:
+            raise WorkflowError("Telegram envelope was not created from gateway session context")
         if envelope.platform != "telegram" or envelope.chat_type != "dm":
             raise WorkflowError("Only authenticated Telegram direct messages are accepted")
         if envelope.user_id not in self.allowed_owner_ids or envelope.chat_id != envelope.user_id:
@@ -194,15 +279,16 @@ class NativeDelegationBridge(_Phase2Store):
         repository: str,
         base_sha: str,
         verification_command: list[str],
-        delegation_id: str | None = None,
     ) -> str:
         task = self.company._row("tasks", task_id)
         if task["role"] != builder_role or builder_role not in BUILDERS:
             raise WorkflowError("Builder role does not match the task")
         if task["state"] != "queued":
             raise WorkflowError("Only a queued task can be delegated")
-        if delegation_id is not None and not delegation_id.strip():
-            raise WorkflowError("Native Hermes delegation ID cannot be empty")
+        project = self.company._row("projects", task["project_id"])
+        if project["state"] != "active":
+            raise WorkflowError("Project is paused")
+
         if not verification_command or any(not isinstance(part, str) or not part for part in verification_command):
             raise WorkflowError("A Director-approved verification command is required")
 
@@ -215,7 +301,7 @@ class NativeDelegationBridge(_Phase2Store):
         self._git(repo, "cat-file", "-e", f"{base}^{{commit}}")
 
         run_id = uuid.uuid4().hex[:12]
-        stored_delegation_id = delegation_id.strip() if delegation_id else f"pending:{run_id}"
+        stored_delegation_id = f"pending:{run_id}"
         try:
             with self.db:
                 self.db.execute(
@@ -235,7 +321,12 @@ class NativeDelegationBridge(_Phase2Store):
                         None,
                     ),
                 )
-                self.db.execute("UPDATE tasks SET state='working' WHERE id=?", (task_id,))
+                claimed = self.db.execute(
+                    "UPDATE tasks SET state='working' WHERE id=? AND state='queued'",
+                    (task_id,),
+                )
+                if claimed.rowcount != 1:
+                    raise WorkflowError("Task was claimed by another native run")
                 self.company._event(
                     task["project_id"],
                     "director",
@@ -246,13 +337,15 @@ class NativeDelegationBridge(_Phase2Store):
                     base_sha=base,
                 )
         except sqlite3.IntegrityError as exc:
-            raise WorkflowError("Delegation ID has already been used") from exc
+            raise WorkflowError("Task already has an active native run") from exc
         return run_id
 
-    def bind_delegation(self, run_id: str, delegation_id: str) -> None:
+    def bind_delegation(self, run_id: str, receipt: HermesDelegationReceipt) -> None:
         """Bind the ID returned by ``delegate_task`` to a prepared run."""
-        if not delegation_id.strip() or delegation_id.startswith("pending:"):
-            raise WorkflowError("A real native Hermes delegation ID is required")
+        if not isinstance(receipt, HermesDelegationReceipt):
+            raise WorkflowError("A verified Hermes delegation receipt is required")
+        receipt.assert_valid()
+        delegation_id = receipt.delegation_id
         run = self._run_row(run_id)
         if run["status"] != "working" or not run["delegation_id"].startswith("pending:"):
             raise WorkflowError("Native run is not awaiting a delegation ID")
@@ -261,7 +354,7 @@ class NativeDelegationBridge(_Phase2Store):
             with self.db:
                 self.db.execute(
                     "UPDATE native_runs SET delegation_id=? WHERE id=?",
-                    (delegation_id.strip(), run_id),
+                    (delegation_id, run_id),
                 )
                 self.company._event(
                     task["project_id"],
@@ -269,7 +362,7 @@ class NativeDelegationBridge(_Phase2Store):
                     "native_delegation_started",
                     task_id=run["task_id"],
                     run_id=run_id,
-                    delegation_id=delegation_id.strip(),
+                    delegation_id=delegation_id,
                     base_sha=run["base_sha"],
                 )
         except sqlite3.IntegrityError as exc:
@@ -281,7 +374,16 @@ class NativeDelegationBridge(_Phase2Store):
             raise WorkflowError("Unknown native run identifier")
         return row
 
-    def complete_job(self, run_id: str, delegation_id: str, head_sha: str) -> dict:
+    def complete_job(
+        self,
+        run_id: str,
+        receipt: HermesDelegationReceipt,
+        head_sha: str,
+    ) -> dict:
+        if not isinstance(receipt, HermesDelegationReceipt):
+            raise WorkflowError("A verified Hermes delegation receipt is required")
+        receipt.assert_valid(require_completed=True)
+        delegation_id = receipt.delegation_id
         run = self._run_row(run_id)
         if run["status"] != "working" or run["delegation_id"] != delegation_id:
             raise WorkflowError("Native run is not active or delegation ID does not match")
@@ -299,6 +401,8 @@ class NativeDelegationBridge(_Phase2Store):
         ]
         if not changed_files:
             raise WorkflowError("Builder commit contains no changed files")
+        if self._git(repo, "status", "--porcelain", "--untracked-files=all"):
+            raise WorkflowError("Workspace must be clean before verification")
 
         command = json.loads(run["verification_command"])
         try:
@@ -320,6 +424,8 @@ class NativeDelegationBridge(_Phase2Store):
         }
         if verified.returncode != 0:
             raise WorkflowError("Director verification command failed")
+        if self._git(repo, "status", "--porcelain", "--untracked-files=all"):
+            raise WorkflowError("Verification command modified the workspace")
 
         evidence = {
             "kind": "verified_native_delegation",
@@ -360,11 +466,15 @@ class NativeDelegationBridge(_Phase2Store):
         *,
         run_id: str,
         reviewer: str,
-        delegation_id: str,
+        receipt: HermesDelegationReceipt,
         head_sha: str,
         approved: bool,
         note: str,
     ) -> None:
+        if not isinstance(receipt, HermesDelegationReceipt):
+            raise WorkflowError("A verified Hermes delegation receipt is required")
+        receipt.assert_valid(require_completed=True)
+        delegation_id = receipt.delegation_id
         run = self._run_row(run_id)
         if run["status"] != "completed" or not run["head_sha"]:
             raise WorkflowError("Only a completed native run can be reviewed")
@@ -373,7 +483,7 @@ class NativeDelegationBridge(_Phase2Store):
         head = self._require_sha(head_sha, "Review SHA")
         if head != run["head_sha"]:
             raise WorkflowError("Review is not bound to the builder's exact commit")
-        if not delegation_id.strip() or delegation_id == run["delegation_id"]:
+        if delegation_id == run["delegation_id"]:
             raise WorkflowError("Reviewer must use an independent native delegation")
         exists = self.db.execute(
             "SELECT 1 FROM native_reviews WHERE run_id=? AND reviewer=?",
@@ -396,21 +506,87 @@ class NativeDelegationBridge(_Phase2Store):
                 (
                     run_id,
                     reviewer,
-                    delegation_id.strip(),
+                    delegation_id,
                     head,
                     "approved" if approved else "rejected",
                     note.strip(),
                     now(),
                 ),
             )
-            self.company.review_task(run["task_id"], reviewer, approved, note)
+            self.db.execute(
+                "INSERT INTO reviews VALUES (?,?,?,?,?) ON CONFLICT(task_id,reviewer) "
+                "DO UPDATE SET verdict=excluded.verdict,note=excluded.note,created_at=excluded.created_at",
+                (
+                    run["task_id"],
+                    reviewer,
+                    "approved" if approved else "rejected",
+                    note.strip(),
+                    now(),
+                ),
+            )
+            self.company._event(
+                task["project_id"],
+                reviewer,
+                "task_reviewed",
+                task_id=run["task_id"],
+                approved=approved,
+                note=note.strip(),
+            )
+            if not approved:
+                attempts = task["attempts"] + 1
+                new_state = "blocked" if attempts >= 3 else "queued"
+                self.db.execute(
+                    "UPDATE tasks SET state=?,attempts=? WHERE id=?",
+                    (new_state, attempts, run["task_id"]),
+                )
+                self.db.execute("DELETE FROM reviews WHERE task_id=?", (run["task_id"],))
+                self.company._event(
+                    task["project_id"],
+                    "architect",
+                    "revision_requested",
+                    task_id=run["task_id"],
+                    attempts=attempts,
+                    state=new_state,
+                )
+                if attempts == 2:
+                    self.company._event(
+                        task["project_id"],
+                        "architect",
+                        "escalation_architect",
+                        task_id=run["task_id"],
+                        reason="two rejected attempts",
+                    )
+                if attempts >= 3:
+                    self.company._event(
+                        task["project_id"],
+                        "director",
+                        "director_attention_required",
+                        task_id=run["task_id"],
+                        reason="three rejected attempts",
+                    )
+            else:
+                count = self.db.execute(
+                    "SELECT count(*) FROM reviews WHERE task_id=? AND verdict='approved'",
+                    (run["task_id"],),
+                ).fetchone()[0]
+                if count == 2:
+                    self.db.execute(
+                        "UPDATE tasks SET state='accepted' WHERE id=?",
+                        (run["task_id"],),
+                    )
+                    self.company._event(
+                        task["project_id"],
+                        "director",
+                        "task_accepted",
+                        task_id=run["task_id"],
+                    )
             self.company._event(
                 task["project_id"],
                 reviewer,
                 "native_review_recorded",
                 task_id=run["task_id"],
                 run_id=run_id,
-                delegation_id=delegation_id.strip(),
+                delegation_id=delegation_id,
                 head_sha=head,
                 approved=approved,
             )

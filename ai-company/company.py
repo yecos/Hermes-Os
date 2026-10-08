@@ -76,6 +76,17 @@ class Company:
             (project_id, actor, kind, json.dumps(payload, ensure_ascii=False), now()),
         )
 
+    def _is_native_managed_task(self, task_id: str) -> bool:
+        """Return whether Phase 2 owns this task's authority path."""
+        table = self.db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='inbound_requests'"
+        ).fetchone()
+        if table is None:
+            return False
+        return self.db.execute(
+            "SELECT 1 FROM inbound_requests WHERE task_id=?", (task_id,)
+        ).fetchone() is not None
+
     def create_project(self, name: str, brief: str) -> str:
         if not name.strip() or not brief.strip():
             raise WorkflowError("Project name and brief are required")
@@ -102,6 +113,8 @@ class Company:
 
     def start_task(self, task_id: str, actor: str):
         task = self._row("tasks", task_id)
+        if self._is_native_managed_task(task_id):
+            raise WorkflowError("Native task must be started through NativeDelegationBridge")
         if task["role"] != actor or task["state"] != "queued":
             raise WorkflowError("Only the assigned builder can start a queued task")
         if self._row("projects", task["project_id"])["state"] != "active":
@@ -112,6 +125,8 @@ class Company:
 
     def submit_task(self, task_id: str, actor: str, evidence: str):
         task = self._row("tasks", task_id)
+        if self._is_native_managed_task(task_id):
+            raise WorkflowError("Native task evidence must be verified through NativeDelegationBridge")
         if task["role"] != actor or task["state"] != "working":
             raise WorkflowError("Only the assigned builder can submit a working task")
         if not evidence.strip():
@@ -125,6 +140,8 @@ class Company:
 
     def review_task(self, task_id: str, reviewer: str, approved: bool, note: str):
         task = self._row("tasks", task_id)
+        if self._is_native_managed_task(task_id):
+            raise WorkflowError("Native task must be reviewed through NativeDelegationBridge")
         if reviewer not in REVIEWERS or task["state"] != "review" or not note.strip():
             raise WorkflowError("Review requires assigned reviewer, review state and note")
         with self.db:

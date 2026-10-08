@@ -49,9 +49,16 @@ invocar de forma segura. Por ello el primer bridge tiene dos fases:
    `bind_delegation(...)`.
 
 Al terminar el constructor, `complete_job(...)` ignora su afirmación de que las
-pruebas pasaron: inspecciona Git y vuelve a ejecutar el comando guardado. Los
-supervisores se registran con `record_review(...)`; sus IDs deben ser distintos
-al constructor y entre sí, y ambos veredictos se ligan al mismo SHA.
+pruebas pasaron: exige un worktree limpio, inspecciona Git, vuelve a ejecutar el
+comando guardado y comprueba otra vez que la verificación no modificó el
+workspace. Los supervisores se registran con `record_review(...)`; sus IDs deben
+ser distintos al constructor y entre sí, y ambos veredictos se ligan al mismo
+SHA. Los IDs no son texto libre: `HermesDelegationReceipt` los comprueba contra
+la tabla durable `async_delegations` del `state.db` de Hermes.
+
+Las tareas creadas por este bridge quedan marcadas por `inbound_requests`; los
+métodos H1 `start_task`, `submit_task` y `review_task` rechazan esas tareas para
+que no se pueda eludir la verificación nativa.
 
 ## Telegram
 
@@ -72,10 +79,16 @@ inyecta desde configuración local; los IDs personales no se guardan en Git.
 
 ```python
 from company import Company
-from phase2 import NativeDelegationBridge, TelegramDirectorBridge, TelegramEnvelope
+from phase2 import (
+    HermesDelegationReceipt,
+    NativeDelegationBridge,
+    TelegramDirectorBridge,
+    TelegramEnvelope,
+)
 
 company = Company("company.db")
 director = TelegramDirectorBridge(company, allowed_owner_ids={OWNER_ID})
+envelope = TelegramEnvelope.from_gateway_environment(user_text)
 project_id, task_id = director.ingest(envelope, ...)
 
 bridge = NativeDelegationBridge(company)
@@ -87,11 +100,16 @@ run_id = bridge.prepare_job(
     verification_command=[PYTHON, "-m", "unittest", "discover", "-s", "tests", "-v"],
 )
 
-# La sesión Hermes llama aquí a delegate_task(...).
-bridge.bind_delegation(run_id, returned_subagent_id)
+# La sesión Hermes llama aquí a delegate_task(...). El ID durable devuelto se
+# valida contra el registro de Hermes antes de enlazarlo.
+builder_receipt = HermesDelegationReceipt.from_registry(returned_delegation_id)
+bridge.bind_delegation(run_id, builder_receipt)
 
 # Al recibir el resultado, el Director obtiene HEAD directamente de Git.
-evidence = bridge.complete_job(run_id, returned_subagent_id, verified_head_sha)
+builder_receipt = HermesDelegationReceipt.from_registry(
+    returned_delegation_id, require_completed=True
+)
+evidence = bridge.complete_job(run_id, builder_receipt, verified_head_sha)
 
 # Dos delegate_task independientes revisan evidence["head_sha"].
 bridge.record_review(run_id=run_id, reviewer="product", ...)
