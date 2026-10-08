@@ -14,6 +14,7 @@ Requiere Python 3.11+ y no necesita paquetes externos.
 
 ```bash
 python -m unittest discover -s ai-company/tests -v
+python ai-company/smoke_demo.py  # simulación TEMPLO, no usa modelos, Telegram ni despliegue
 python ai-company/company.py --db hermes-company.sqlite3 new "TEMPLO demo" "Cotizaciones"
 python ai-company/company.py --help
 ```
