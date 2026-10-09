@@ -103,3 +103,6 @@ Windows + perfiles Hermes 0.20.2: [ECO-WINDOWS-RUNBOOK.md](ECO-WINDOWS-RUNBOOK.m
 
 ### Controlador persistente ECO (Windows)
 Ver [COMPANY-CONTROL-RUNBOOK.md](COMPANY-CONTROL-RUNBOOK.md) para ejecución por perfiles, presupuesto diario y aprobación humana. El controlador solo inicia Codex tras aprobar una tarea; no hay E2E con modelos real todavía.
+
+### Plan de estabilizacion
+[STABILIZATION-MVP.md](STABILIZATION-MVP.md): calidad automatica sin IA, metricas, commit temprano y tres pilotos preparados sin consumo.

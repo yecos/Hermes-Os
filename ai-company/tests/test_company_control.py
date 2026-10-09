@@ -39,6 +39,15 @@ class CompanyControlTests(unittest.TestCase):
         return self.ctl.submit(title="Demo", spec="Create one simple function with test",
                                repository=str(self.repo), role="backend")
 
+    def test_metrics_are_local_and_require_no_model(self):
+        job = self.submit()
+        with patch("company_control.native", side_effect=AssertionError("No inference")):
+            report = self.ctl.metrics()
+        self.assertEqual(report["daily_starts"], 0)
+        self.assertEqual(report["jobs_by_status"]["pending_approval"], 1)
+        self.assertEqual(report["model_calls_from_this_command"], 0)
+        self.assertEqual(report["tokens"], "unknown_from_controller")
+
     def test_submission_does_not_spawn_models(self):
         with patch("company_control.native", side_effect=AssertionError("no native calls")):
             job = self.submit()
@@ -55,6 +64,26 @@ class CompanyControlTests(unittest.TestCase):
         self.assertEqual(self.ctl.row(job)["stage"], "backend")
         with self.assertRaises(ValueError):
             self.ctl.approve(job)
+
+    def test_one_active_project_must_finish_before_another_is_approved(self):
+        first = self.submit()
+        second = self.submit()
+        self.ctl.approve(first)
+        with self.assertRaisesRegex(EcoError, "active project"):
+            self.ctl.approve(second)
+        self.assertEqual(self.ctl.row(second)["status"], "pending_approval")
+
+    def test_approval_requires_three_available_eco_starts(self):
+        jobid = self.submit()
+        for index in range(2):
+            runid = f"used-start-{index}"
+            self.ctl.guard.reserve(
+                run_id=runid, project_id=f"old-{index}", role="backend")
+            self.ctl.guard.finish(run_id=runid, status="failed")
+        with self.assertRaisesRegex(EcoError, "Not enough daily Codex slots"):
+            self.ctl.approve(jobid)
+        self.assertEqual(self.ctl.row(jobid)["status"], "pending_approval")
+        self.assertEqual(self.ctl.guard.report()["total_starts"], 2)
 
     def test_rejects_dirty_repository(self):
         (self.repo / "scratch.txt").write_text("dirty", encoding="utf-8")

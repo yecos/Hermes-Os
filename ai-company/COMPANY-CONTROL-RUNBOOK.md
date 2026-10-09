@@ -67,3 +67,6 @@ Sin iniciar modelos, pruebas locales `41/41` y comprobación `tick` con cola vac
 **Pendiente para declarar E2E terminado:** demostrar 1 ejecución real de constructor + 2 revisores, comprobar los modelos efectivos en las sesiones, trabajo Git, consumo posterior e informar al propietario. Los controles de tokens `max_output_tokens` declarados en la política no están aplicados por Kanban nativo; los presupuestos que se hacen cumplir son número de arranques, concurrencia, max_turns y tiempos máximos. Los logs de Hermes/uso no equivalen a facturación de suscripción.
 
 No publicar bases de datos, credenciales, logs de sesiones ni archivos `.env`. Mantener PR #10 en borrador hasta revisión humana.
+
+## MVP de estabilizacion y puerta sin IA
+Consultar [STABILIZATION-MVP.md](STABILIZATION-MVP.md). El constructor prioriza commit temprano; quality_gate verifica Git, detecta secretos en el diff y corre unittest Python stdlib cuando hay tests cambiados (sin gastar IA). El comando `company_control.py metrics` es local. Una tarea no se aprueba si faltan los 3 inicios para constructor + dos revisores o hay otra tarea activa. Se prepararon tres pilotos reales pendientes de aprobacion humana; nada se inicia automaticamente.

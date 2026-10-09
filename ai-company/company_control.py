@@ -16,6 +16,7 @@ import time
 import uuid
 from pathlib import Path
 from eco_mode import EcoError, EcoUsageLedger, load_policy
+from quality_gate import verify_commit, significant_git_status
 
 ROOT = Path(__file__).resolve().parent
 HERMES_LOCAL = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "hermes"
@@ -82,6 +83,10 @@ class Controller:
           FOREIGN KEY(job_id) REFERENCES jobs(id)
         );
         CREATE INDEX IF NOT EXISTS idx_stage_job ON stages(job_id);
+        CREATE TABLE IF NOT EXISTS quality_reports (
+            job_id TEXT PRIMARY KEY, commit_sha TEXT NOT NULL,
+            report_json TEXT NOT NULL, checked_at INTEGER NOT NULL
+        );
         """)
         self.policy = load_policy()
         self.guard = EcoUsageLedger(self.path.parent / "company-control-usage.sqlite3", self.policy)
@@ -132,11 +137,34 @@ class Controller:
         )
 
     def approve(self, jobid: str):
-        row = self.row(jobid)
-        if row["status"] != "pending_approval":
-            raise ValueError("Only a pending request can be approved")
-        # Upgrade pre-fix pending jobs whose stage was stored as "builder".
-        self.update_job(jobid, "queued", stage=row["role"])
+        # A small project needs one builder and two independent reviewers.
+        # Do not start it if today's remaining local ECO slots cannot cover
+        # the full circuit; reserve retries only via explicit owner exception.
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self.row(jobid)
+            if row["status"] != "pending_approval":
+                raise ValueError("Only a pending request can be approved")
+            active = self.db.execute(
+                "SELECT id FROM jobs WHERE id<>? AND "
+                "status IN ('queued','stage_queued','running') LIMIT 1",
+                (jobid,)
+            ).fetchone()
+            if active:
+                raise EcoError("Finish or block the active project before approving another")
+            day_start = int(time.time()) // 86400 * 86400
+            starts = self.guard.db.execute(
+                "SELECT COUNT(*) FROM eco_runs WHERE started_at>=? AND started_at<?",
+                (day_start, day_start + 86400)
+            ).fetchone()[0]
+            if self.policy["limits"]["daily_global_starts"] - starts < 3:
+                raise EcoError("Not enough daily Codex slots for builder plus two reviewers")
+            # Upgrade pre-fix pending jobs whose stage was stored as 'builder'.
+            self.update_job(jobid, "queued", stage=row["role"])
+            self.db.commit()
+        except BaseException:
+            self.db.rollback()
+            raise
 
     def retry_failed_builder_once(self, jobid: str) -> str:
         """Explicitly authorized second launch, preserving the first worktree.
@@ -223,6 +251,53 @@ class Controller:
                 "usage": self.guard.report(jobid),
                 "note": "Usage missing from Hermes is unknown, not zero; no production deployment"}
 
+    def metrics(self) -> dict:
+        """No-LLM operational scorecard; local starts are not account quota."""
+        day_start = int(time.time()) // 86400 * 86400
+        counts = {
+            row["status"]: row["n"] for row in self.db.execute(
+                "SELECT status,COUNT(*) AS n FROM jobs GROUP BY status"
+            )
+        }
+        stages = {
+            row["role"]: {"verified": row["verified"], "failed": row["failed"]}
+            for row in self.db.execute("""
+                SELECT role,
+                    SUM(CASE WHEN status='verified' THEN 1 ELSE 0 END) AS verified,
+                    SUM(CASE WHEN status='reserved' THEN 1 ELSE 0 END) AS failed
+                FROM stages GROUP BY role
+            """)
+        }
+        today = [
+            dict(row) for row in self.guard.db.execute(
+                "SELECT role,COUNT(*) AS starts FROM eco_runs "
+                "WHERE started_at>=? AND started_at<? GROUP BY role",
+                (day_start, day_start + 86400)
+            )
+        ]
+        finished = [
+            dict(r) for r in self.db.execute(
+                "SELECT id,status,stage,commit_sha,submitted_at,updated_at "
+                "FROM jobs ORDER BY submitted_at DESC LIMIT 20"
+            )
+        ]
+        return {
+            "measurement": "local_controller_only_not_subscription_quota",
+            "today_utc": time.strftime("%Y-%m-%d", time.gmtime()),
+            "daily_global_limit": self.policy["limits"]["daily_global_starts"],
+            "daily_starts": sum(row["starts"] for row in today),
+            "starts_by_role": {row["role"]: row["starts"] for row in today},
+            "jobs_by_status": counts,
+            "jobs_awaiting_owner": counts.get("awaiting_owner", 0),
+            "jobs_accepted": counts.get("accepted", 0),
+            "jobs_blocked": counts.get("blocked", 0),
+            "stage_receipts": stages,
+            "recent_jobs": finished,
+            "tokens": "unknown_from_controller",
+            "unmeasured_telegram_director_sessions": True,
+            "model_calls_from_this_command": 0,
+        }
+
     def _create_task(self, job: dict, role: str):
         if role not in BUILDER_ROLES | set(REVIEWERS):
             raise RuntimeError("Unrecognized role")
@@ -232,12 +307,14 @@ class Controller:
         conf = self.policy["roles"][role]
         if role in BUILDER_ROLES:
             body = (
-                "HERMES AI COMPANY ECO. Implement the following bounded specification "
-                "in your ISOLATED Git worktree. No deployment, no merge, no new Kanban "
-                "cards, no nested delegation. Run minimal deterministic tests, "
-                "create ONE Git commit and complete this task using kanban_complete. "
-                "In the completion summary provide the exact FULL 40-char HEAD commit "
-                "SHA and test result. Do not report success without a real commit.\n"
+                "HERMES ECO BUILDER. Work ONLY in your isolated Git worktree. "
+                "No deployment, merge, new cards, nested delegation or installs. "
+                "Prioritize delivery: inspect only needed files, implement the small "
+                "spec, run the shortest relevant tests and COMMIT BY TURN 6. "
+                "Never spend remaining turns on exploration before a commit. "
+                "Keep Git status clean (exclude generated caches from commits). "
+                "Call kanban_complete with the FULL 40-character HEAD SHA, test "
+                "count and observed result. Do not claim success without a commit.\n"
                 f"BASE SHA: {job['base_sha']}\nSPEC:\n{job['spec']}"
             )
             workspace = "worktree:" + job["repository"]
@@ -262,6 +339,21 @@ class Controller:
                 f"REVIEW_SHA: {job['commit_sha']}\n"
                 f"ORIGINAL REQUIREMENTS: {job['spec']}"
             )
+            quality_row = self.db.execute(
+                "SELECT commit_sha,report_json FROM quality_reports WHERE job_id=?",
+                (job["id"],)
+            ).fetchone()
+            if quality_row and quality_row["commit_sha"] == job["commit_sha"]:
+                report = json.loads(quality_row["report_json"])
+                summary = {"sha": report["sha"],
+                           "changed_files": report["changed_files"],
+                           "tests_run": report["tests_run"],
+                           "tests_passed": report["tests_passed"],
+                           "git_diff_check": report["git_diff_check"]}
+                body += "\nDETERMINISTIC QUALITY PACKET (not a substitute for review): " + \
+                    json.dumps(summary, ensure_ascii=False)[:2400]
+            else:
+                body += "\nQUALITY PACKET: unavailable for a legacy task; verify diff directly."
             workspace = "dir:" + job["repository"]
         key = stage_id
         existing = read_native(self.board_path, key=key)
@@ -301,7 +393,8 @@ class Controller:
         git(workspace, "cat-file", "-e", head + "^{commit}")
         # Git exit status is authoritative for the ancestry check.
         git(workspace, "merge-base", "--is-ancestor", job["base_sha"], head)
-        if git(workspace, "status", "--porcelain"):
+        if significant_git_status(git(
+                workspace, "status", "--porcelain", "--untracked-files=all")):
             raise RuntimeError("Builder worktree is dirty: preserve changes and inspect")
         touched = git(workspace, "diff", "--name-only", job["base_sha"], head)
         if not touched.strip():
@@ -312,6 +405,11 @@ class Controller:
         ))
         if head not in descriptions.lower():
             raise RuntimeError("Native builder completion did not report its actual HEAD SHA")
+        report = verify_commit(workspace, job["base_sha"], head)
+        self.db.execute(
+            "INSERT OR REPLACE INTO quality_reports VALUES (?,?,?,?)",
+            (job["id"], head, json.dumps(report, ensure_ascii=False), int(time.time()))
+        )
         return head
 
     def _verify_review(self, job: dict, role: str, task: dict, run: dict | None):
@@ -337,8 +435,9 @@ class Controller:
         # Native Kanban stores registered isolated worktrees under .worktrees/.
         # Do not treat that managed directory as a modification to main checkout.
         # All other untracked or tracked changes continue to block review.
-        if git(job["repository"], "status", "--porcelain", "--", ".",
-               ":(exclude).worktrees"):
+        if significant_git_status(git(
+                job["repository"], "status", "--porcelain",
+                "--untracked-files=all", "--", ".", ":(exclude).worktrees")):
             raise RuntimeError("Main review repository changed; approval is unsafe")
 
     def revalidate_blocked_product_review(self, jobid: str) -> None:
@@ -531,6 +630,7 @@ def execute():
         c.add_argument("jobid")
     cmds.add_parser("tick")
     cmds.add_parser("list")
+    cmds.add_parser("metrics")
     args = parser.parse_args()
     ctl = Controller(args.db, args.board_db)
     try:
@@ -557,6 +657,8 @@ def execute():
         elif args.command == "list":
             result = [dict(r) for r in ctl.db.execute(
                 "SELECT id,title,role,status,stage,commit_sha FROM jobs ORDER BY submitted_at DESC LIMIT 50")]
+        elif args.command == "metrics":
+            result = ctl.metrics()
         else:
             result = ctl.tick()
         print(json.dumps(result, ensure_ascii=False, indent=2))
