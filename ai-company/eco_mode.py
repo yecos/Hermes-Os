@@ -60,7 +60,8 @@ def load_policy(path: str | Path = POLICY_PATH, models_path: str | Path = MODEL_
         raise EcoError("Missing ECO execution limits")
     for key in (
         "max_active_directors", "max_active_builders", "max_active_reviewers",
-        "daily_starts_per_project", "daily_starts_per_role_per_project"
+        "daily_starts_per_project", "daily_starts_per_role_per_project",
+        "daily_global_starts"
     ):
         if type(limits.get(key)) is not int or limits[key] < 1:
             raise EcoError(f"Invalid {key}")
@@ -153,6 +154,11 @@ class EcoUsageLedger:
                     "SELECT COUNT(*) FROM eco_runs WHERE project_id=? AND role=? AND started_at>=?",
                     (project_id, role, day_start)
                 ).fetchone()[0]
+                global_count = self.db.execute(
+                    "SELECT COUNT(*) FROM eco_runs WHERE started_at>=?", (day_start,)
+                ).fetchone()[0]
+                if global_count >= limits["daily_global_starts"]:
+                    raise EcoError("Global daily Codex session-start budget exhausted")
                 if count >= limits["daily_starts_per_project"]:
                     raise EcoError("Daily project session-start budget exhausted")
                 if role_count >= limits["daily_starts_per_role_per_project"]:

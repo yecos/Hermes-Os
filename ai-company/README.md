@@ -100,3 +100,6 @@ El primer tracer bullet de los pasos 1–2 está documentado en el
 con la operación duradera de los seis roles.
 
 Windows + perfiles Hermes 0.20.2: [ECO-WINDOWS-RUNBOOK.md](ECO-WINDOWS-RUNBOOK.md) contiene la instalacion, validacion, rollback y limites reales del Modo ECO.
+
+### Controlador persistente ECO (Windows)
+Ver [COMPANY-CONTROL-RUNBOOK.md](COMPANY-CONTROL-RUNBOOK.md) para ejecución por perfiles, presupuesto diario y aprobación humana. El controlador solo inicia Codex tras aprobar una tarea; no hay E2E con modelos real todavía.

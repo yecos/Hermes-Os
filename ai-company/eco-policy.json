@@ -3,13 +3,14 @@
   "mode": "codex_balanced",
   "provider": "openai-codex",
   "target": "six_hermes_profiles",
-  "enforcement_status": "requires_dispatcher_integration",
+  "enforcement_status": "controller_limited_native_kanban",
   "limits": {
     "max_active_directors": 1,
     "max_active_builders": 1,
     "max_active_reviewers": 1,
-    "daily_starts_per_project": 24,
-    "daily_starts_per_role_per_project": 8,
+    "daily_starts_per_project": 3,
+    "daily_starts_per_role_per_project": 1,
+    "daily_global_starts": 4,
     "backoff_seconds_on_429": [
       300,
       900,

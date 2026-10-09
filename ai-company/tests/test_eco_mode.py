@@ -72,8 +72,8 @@ class EcoModeTests(unittest.TestCase):
             self.reserve("a1", "architect")
         self.complete("b1")
         self.complete("p1")
-        self.assertEqual(self.reserve("b2", "frontend"), "reserved")
-        self.assertEqual(self.reserve("a1", "architect"), "reserved")
+        self.assertEqual(self.reserve("b2", "frontend", project_id="pilot2"), "reserved")
+        self.assertEqual(self.reserve("a1", "architect", project_id="pilot2"), "reserved")
 
     def test_daily_role_limit_blocks_extra_sessions(self):
         count = self.policy["limits"]["daily_starts_per_role_per_project"]
@@ -83,6 +83,14 @@ class EcoModeTests(unittest.TestCase):
             self.complete(run)
         with self.assertRaisesRegex(EcoError, "role session-start"):
             self.reserve("extra", "backend")
+
+    def test_global_daily_budget_cannot_be_bypassed_with_new_projects(self):
+        for i in range(self.policy["limits"]["daily_global_starts"]):
+            job = f"job-global-{i}"
+            self.reserve(job, "backend", project_id=job)
+            self.complete(job)
+        with self.assertRaisesRegex(EcoError, "Global daily Codex"):
+            self.reserve("global-extra", "product", project_id="fresh-project")
 
     def test_429_pauses_all_codex_roles_without_spinning(self):
         self.reserve("b1")
@@ -95,11 +103,11 @@ class EcoModeTests(unittest.TestCase):
     def test_backoff_increases_after_repeated_429(self):
         self.reserve("b1")
         self.complete("b1", status="rate_limited")
-        self.reserve("b2", at=self.now + 303)
+        self.reserve("b2", project_id="pilot2", at=self.now + 303)
         self.complete("b2", status="rate_limited", at=self.now + 304)
         with self.assertRaisesRegex(EcoError, "cooling down"):
-            self.reserve("b3", at=self.now + 500)
-        self.assertEqual(self.reserve("b3", at=self.now + 1205), "reserved")
+            self.reserve("b3", project_id="pilot3", at=self.now + 500)
+        self.assertEqual(self.reserve("b3", project_id="pilot3", at=self.now + 1205), "reserved")
 
     def test_token_telemetry_counts_only_reported_values(self):
         self.reserve("b1")
@@ -137,7 +145,7 @@ class EcoModeTests(unittest.TestCase):
         with self.assertRaises(EcoError):
             self.reserve("b2")
         self.complete("b1", status="cancelled")
-        self.assertEqual(self.reserve("b2"), "reserved")
+        self.assertEqual(self.reserve("b2", project_id="pilot2"), "reserved")
 
 
 if __name__ == "__main__":
