@@ -58,3 +58,7 @@ The older `phase2.py` workflow for task/commit/two-reviewer evidence is not auto
 ## Safe operating defaults
 
 Keep Telegram in default only. Use max one worker at a time, no automatic task decomposition, no loop-based retries, short scopes and narrow file diffs. Keep backups and usage captures local. Never publish secrets, credentials, session content or private usage logs. Changes belong to PR #10 until formally reviewed and authorized; never merge or deploy from this board automatically.
+
+## Local scheduled metering
+
+Daily usage snapshot (no model calls): Windows Scheduled Task `Hermes-ECO-Usage-Daily` at 23:55 local runs `eco-usage-snapshot-windows.ps1` and writes local-only aggregates to `$env:LOCALAPPDATA\hermes\eco-metrics\YYYY-MM-DD.txt`. It runs when Windows/user session permits; it does not wake a powered-off PC.
