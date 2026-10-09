@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import json
 import unittest
 from pathlib import Path
 
@@ -36,6 +37,22 @@ class AgentModelConfigTests(unittest.TestCase):
             self.assertEqual(roles[builder]["authority"], "builder")
             self.assertFalse(roles[builder]["read_only"])
 
+    def test_selected_models_match_strict_role_maxima(self):
+        roles = load_agent_models(self.path)["roles"]
+        expected = {
+            "director": "gpt-5.6-sol",
+            "product": "gpt-6-luna",
+            "architect": "gpt-6-luna",
+            "frontend": "gpt-5.6-luna",
+            "backend": "gpt-5.6-luna",
+            "integrations": "gpt-5.6-luna",
+        }
+        for role, maximum in expected.items():
+            self.assertEqual(roles[role]["maximum_model"], maximum)
+            self.assertEqual(roles[role]["model"], maximum)
+            self.assertEqual(roles[role]["provider"], "openai-codex")
+            self.assertEqual(roles[role]["availability_status"], "verified")
+
     def test_configuration_contains_no_secret_fields_or_values(self):
         config = load_agent_models(self.path)
         forbidden = {"api_key", "token", "password", "secret", "oauth"}
@@ -49,6 +66,13 @@ class AgentModelConfigTests(unittest.TestCase):
     def test_unknown_or_missing_roles_are_rejected(self):
         with self.assertRaises(WorkflowError):
             load_agent_models({"version": 1, "roles": {"director": {}}})
+
+    def test_unavailable_role_stays_unset_pending_authorization(self):
+        config = json.loads(self.path.read_text(encoding="utf-8"))
+        config["roles"]["product"]["model"] = None
+        config["roles"]["product"]["availability_status"] = "pending_authorization"
+        loaded = load_agent_models(config)
+        self.assertIsNone(loaded["roles"]["product"]["model"])
 
 
 if __name__ == "__main__":

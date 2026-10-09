@@ -22,30 +22,52 @@
     },
     "product": {
       "provider": "openai-codex",
-      "model": "gpt-5.6-sol",
-      "status": "verified_e2e"
+      "model": "gpt-6-luna",
+      "status": "connectivity_verified_role_e2e_pending",
+      "historical_e2e_model": "gpt-5.6-sol"
     },
     "architect": {
       "provider": "openai-codex",
-      "model": "gpt-5.6-sol",
-      "status": "verified_e2e"
+      "model": "gpt-6-luna",
+      "status": "connectivity_verified_role_e2e_pending",
+      "historical_e2e_model": "gpt-5.6-sol"
     },
     "frontend": {
       "provider": "openai-codex",
-      "model": "gpt-5.6-sol",
-      "status": "configured_not_exercised"
+      "model": "gpt-5.6-luna",
+      "status": "connectivity_verified_role_not_exercised"
     },
     "backend": {
       "provider": "openai-codex",
-      "model": "gpt-5.6-sol",
-      "status": "verified_e2e"
+      "model": "gpt-5.6-luna",
+      "status": "connectivity_verified_role_e2e_pending",
+      "historical_e2e_model": "gpt-5.6-sol"
     },
     "integrations": {
       "provider": "openai-codex",
-      "model": "gpt-5.6-sol",
-      "status": "configured_not_exercised"
+      "model": "gpt-5.6-luna",
+      "status": "connectivity_verified_role_not_exercised"
     }
   },
+  "model_connectivity_tests": [
+    {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "result": "active_current_session"
+    },
+    {
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "result": "passed",
+      "session_id": "20261008_210228_b056cc"
+    },
+    {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna",
+      "result": "passed",
+      "session_id": "20261008_210252_ca6df1"
+    }
+  ],
   "source": {
     "platform": "telegram",
     "chat_type": "dm",

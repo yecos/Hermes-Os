@@ -48,15 +48,22 @@ Los tres constructores no pueden aprobar su propia tarea. Una entrega solo se co
 
 La configuración versionada y sin secretos está en
 [`agent-models.json`](agent-models.json), validada por `agent_models.py` y su
-suite. Los seis roles usan inicialmente el modelo realmente verificado en este
-hito: proveedor `openai-codex`, modelo `gpt-5.6-sol`. Los límites de
-iteraciones, tiempo, salida, toolsets y permisos sí varían por nivel
-alto/medio/económico. Las credenciales permanecen en Hermes y nunca se guardan
-en este repositorio.
+suite. La política es `strict_maximum` y fija techos independientes:
+Director usa como máximo `gpt-5.6-sol`; Product y Architect, `gpt-6-luna`;
+Frontend, Backend e Integrations, `gpt-5.6-luna`. Los tres modelos aparecen
+en el catálogo vivo de `openai-codex` y respondieron a pruebas reales de
+conectividad. Ningún rol puede heredar silenciosamente un modelo superior; si
+un modelo deja de estar disponible, su estado pasa a `pending_authorization`
+y el campo `model` queda vacío hasta que el propietario autorice un equivalente
+de igual o menor capacidad. Los límites de iteraciones, tiempo, salida,
+toolsets y permisos también varían por rol. Las credenciales permanecen en
+Hermes y nunca se guardan en este repositorio.
 
-Estado comprobado: Director, Product, Architect y Backend ejecutaron trabajo
-real; Frontend e Integrations están configurados pero todavía no han sido
-ejercitados en el tracer bullet E2E.
+Estado comprobado del tracer bullet anterior: Director, Product, Architect y
+Backend ejecutaron trabajo real con la configuración previa. Tras aplicar los
+techos corregidos, los tres modelos seleccionados tienen conectividad
+verificada; una nueva ejecución funcional por rol queda para el siguiente
+circuito, sin reescribir la evidencia histórica.
 
 ### Seguridad
 

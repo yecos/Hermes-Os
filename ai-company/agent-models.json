@@ -1,11 +1,12 @@
 {
-  "version": 1,
-  "default_provider": "openai-codex",
-  "default_model": "gpt-5.6-sol",
+  "version": 2,
+  "selection_policy": "strict_maximum",
   "roles": {
     "director": {
       "provider": "openai-codex",
       "model": "gpt-5.6-sol",
+      "maximum_model": "gpt-5.6-sol",
+      "availability_status": "verified",
       "tier": "high",
       "authority": "orchestrator",
       "read_only": false,
@@ -16,7 +17,9 @@
     },
     "product": {
       "provider": "openai-codex",
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6-luna",
+      "maximum_model": "gpt-6-luna",
+      "availability_status": "verified",
       "tier": "medium",
       "authority": "reviewer",
       "read_only": true,
@@ -27,7 +30,9 @@
     },
     "architect": {
       "provider": "openai-codex",
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6-luna",
+      "maximum_model": "gpt-6-luna",
+      "availability_status": "verified",
       "tier": "medium",
       "authority": "reviewer",
       "read_only": true,
@@ -38,7 +43,9 @@
     },
     "frontend": {
       "provider": "openai-codex",
-      "model": "gpt-5.6-sol",
+      "model": "gpt-5.6-luna",
+      "maximum_model": "gpt-5.6-luna",
+      "availability_status": "verified",
       "tier": "economy",
       "authority": "builder",
       "read_only": false,
@@ -49,7 +56,9 @@
     },
     "backend": {
       "provider": "openai-codex",
-      "model": "gpt-5.6-sol",
+      "model": "gpt-5.6-luna",
+      "maximum_model": "gpt-5.6-luna",
+      "availability_status": "verified",
       "tier": "economy",
       "authority": "builder",
       "read_only": false,
@@ -60,7 +69,9 @@
     },
     "integrations": {
       "provider": "openai-codex",
-      "model": "gpt-5.6-sol",
+      "model": "gpt-5.6-luna",
+      "maximum_model": "gpt-5.6-luna",
+      "availability_status": "verified",
       "tier": "economy",
       "authority": "builder",
       "read_only": false,
