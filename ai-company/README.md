@@ -44,6 +44,20 @@ Usa el identificador devuelto para crear tareas, entregarlas, revisarlas y consu
 
 Los tres constructores no pueden aprobar su propia tarea. Una entrega solo se considera aceptada cuando **product y architect** la aceptan, con evidencia. Al segundo rechazo se escala técnicamente y al tercero se bloquea para atención del Director.
 
+### Modelos por agente
+
+La configuración versionada y sin secretos está en
+[`agent-models.json`](agent-models.json), validada por `agent_models.py` y su
+suite. Los seis roles usan inicialmente el modelo realmente verificado en este
+hito: proveedor `openai-codex`, modelo `gpt-5.6-sol`. Los límites de
+iteraciones, tiempo, salida, toolsets y permisos sí varían por nivel
+alto/medio/económico. Las credenciales permanecen en Hermes y nunca se guardan
+en este repositorio.
+
+Estado comprobado: Director, Product, Architect y Backend ejecutaron trabajo
+real; Frontend e Integrations están configurados pero todavía no han sido
+ejercitados en el tracer bullet E2E.
+
 ### Seguridad
 
 - Este código es un **motor de workflow**, no una barrera de autenticación de producción. Antes de conectar Telegram es obligatorio verificar la identidad del propietario con una allowlist real.

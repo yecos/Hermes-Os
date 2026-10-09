@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "default_provider": "openai-codex",
+  "default_model": "gpt-5.6-sol",
+  "roles": {
+    "director": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "tier": "high",
+      "authority": "orchestrator",
+      "read_only": false,
+      "max_iterations": 50,
+      "max_runtime_seconds": 1200,
+      "max_output_tokens": 8192,
+      "toolsets": ["delegation", "file", "terminal"]
+    },
+    "product": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "tier": "medium",
+      "authority": "reviewer",
+      "read_only": true,
+      "max_iterations": 24,
+      "max_runtime_seconds": 600,
+      "max_output_tokens": 4096,
+      "toolsets": ["file", "terminal"]
+    },
+    "architect": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "tier": "medium",
+      "authority": "reviewer",
+      "read_only": true,
+      "max_iterations": 24,
+      "max_runtime_seconds": 600,
+      "max_output_tokens": 4096,
+      "toolsets": ["file", "terminal"]
+    },
+    "frontend": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "tier": "economy",
+      "authority": "builder",
+      "read_only": false,
+      "max_iterations": 32,
+      "max_runtime_seconds": 900,
+      "max_output_tokens": 4096,
+      "toolsets": ["file", "terminal"]
+    },
+    "backend": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "tier": "economy",
+      "authority": "builder",
+      "read_only": false,
+      "max_iterations": 32,
+      "max_runtime_seconds": 900,
+      "max_output_tokens": 4096,
+      "toolsets": ["file", "terminal"]
+    },
+    "integrations": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "tier": "economy",
+      "authority": "builder",
+      "read_only": false,
+      "max_iterations": 32,
+      "max_runtime_seconds": 900,
+      "max_output_tokens": 4096,
+      "toolsets": ["file", "terminal"]
+    }
+  }
+}

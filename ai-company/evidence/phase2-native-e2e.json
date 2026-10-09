@@ -5,13 +5,45 @@
     "branch": "feature/ai-company-phase2-native-loop",
     "commit": "e0236e4fe988abf80d5ad7be5b2a96bdf8a6a6ae",
     "base_pr_head": "2d1b019aeab4cecddb8ea78a3cff9ade8af4b86b",
-    "unit_tests_passed": 15,
+    "unit_tests_passed": 19,
     "unit_tests_failed": 0,
     "diff_check_passed": true,
     "independent_review": {
       "delegation_id": "deleg_51aa8f7a",
       "verdict": "approved",
       "blocking_findings": []
+    }
+  },
+  "agents": {
+    "director": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "status": "active_and_verified"
+    },
+    "product": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "status": "verified_e2e"
+    },
+    "architect": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "status": "verified_e2e"
+    },
+    "frontend": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "status": "configured_not_exercised"
+    },
+    "backend": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "status": "verified_e2e"
+    },
+    "integrations": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "status": "configured_not_exercised"
     }
   },
   "source": {
