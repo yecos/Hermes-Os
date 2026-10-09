@@ -1,0 +1,8 @@
+BENCHMARK A/B de una misma app web offline "Gastos — Control personal". Entrega SOLO index.html completo con CSS y JS inline, sin Markdown ni explicacion, maximo 250 lineas. SIN dependencias externas, frameworks, CDNs, red, backend o cuentas.
+Interfaz en espanol, profesional minimalista responsive, accesible, con <title>Control de gastos</title>.
+Agregar gastos con campos input date id="date", input text id="category", input number id="amount", boton type="submit" id="add" dentro de form. Fecha obligatoria, categoria no vacia, cantidad COP entera positiva, rechazar invalidos con mensaje visible sin alertas bloqueantes.
+Usar localStorage clave exacta "hermes_expenses_v1"; tras recarga persistir. Primera carga: ningun gasto, total 0.
+Renderizar <ul id="expense-list"> con exactamente un <li> por gasto visible, con fecha, categoria y COP; cada li lleva boton con atributo data-delete igual al ID persistente y permite borrar. Insertar SIEMPRE texto del usuario con textContent, NO como HTML interpretado.
+Filtro dinamico <select id="filter"> con opcion value="all" predeterminada y categorias existentes; filtra solo filas, NO altera total global.
+Elemento id="total" con atributo data-total igual a suma entera de todos los gastos, y texto legible en COP.
+Etiquetas label con for para inputs, uso teclado/mouse. Priorizar comportamiento correcto y calidad visual profesional. Mantener IDs/atributos exactos para tests de navegador externos.

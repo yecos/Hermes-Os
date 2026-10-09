@@ -1,0 +1,52 @@
+{
+  "variant": "multi",
+  "passed": 11,
+  "total": 11,
+  "seconds": 0.36,
+  "results": [
+    {
+      "test": "HTML title",
+      "pass": true
+    },
+    {
+      "test": "Labels form and selectors",
+      "pass": true
+    },
+    {
+      "test": "Initially empty and total=0",
+      "pass": true
+    },
+    {
+      "test": "Add two expenses",
+      "pass": true
+    },
+    {
+      "test": "Global total 150",
+      "pass": true
+    },
+    {
+      "test": "Filter category and keep global total",
+      "pass": true
+    },
+    {
+      "test": "Persistence after refresh",
+      "pass": true
+    },
+    {
+      "test": "Delete and recalc",
+      "pass": true
+    },
+    {
+      "test": "Reject nonpositive expense",
+      "pass": true
+    },
+    {
+      "test": "User data rendered as text, no XSS",
+      "pass": true
+    },
+    {
+      "test": "Mobile no horizontal overflow",
+      "pass": true
+    }
+  ]
+}
