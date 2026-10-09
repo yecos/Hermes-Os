@@ -108,7 +108,7 @@ class Controller:
         self.db.execute(
             "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             (job_id, title.strip(), spec.strip(), repo, base, role,
-             "pending_approval", "builder", None, ts, ts, None)
+             "pending_approval", role, None, ts, ts, None)
         )
         return job_id
 
@@ -135,7 +135,8 @@ class Controller:
         row = self.row(jobid)
         if row["status"] != "pending_approval":
             raise ValueError("Only a pending request can be approved")
-        self.update_job(jobid, "queued")
+        # Upgrade pre-fix pending jobs whose stage was stored as "builder".
+        self.update_job(jobid, "queued", stage=row["role"])
 
     def finish_approval(self, jobid: str):
         row = self.row(jobid)
@@ -312,15 +313,18 @@ class Controller:
                 self._stop(job, str(exc))
             return
         if native_status in {"blocked", "archived"} and step["status"] == "reserved":
-            message = str(task.get("last_failure_error") or (run or {}).get("error") or "")
+            message = str(task.get("last_failure_error") or (run or {}).get("error")
+                          or (run or {}).get("summary") or (run or {}).get("outcome")
+                          or "No native failure reason available")
             rate_limited = "429" in message or "rate limit" in message.lower()
             try:
                 self.guard.finish(run_id=step["id"],
                                   status="rate_limited" if rate_limited else "failed")
             except EcoError:
                 pass
-            self._stop(job, "Worker rate-limited (429); no auto retry" if rate_limited
-                       else "Native task blocked; manual examination required")
+            reason = ("Worker rate-limited (429); no auto retry: " if rate_limited
+                      else "Native task blocked; no auto retry: ") + message[:260]
+            self._stop(job, reason)
             return
         # A native blocked card in status 'created' is intentional; dispatch once.
         if step["status"] != "created":

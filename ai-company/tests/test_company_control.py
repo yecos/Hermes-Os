@@ -52,6 +52,7 @@ class CompanyControlTests(unittest.TestCase):
             self.ctl.finish_approval(job)
         self.ctl.approve(job)
         self.assertEqual(self.ctl.row(job)["status"], "queued")
+        self.assertEqual(self.ctl.row(job)["stage"], "backend")
         with self.assertRaises(ValueError):
             self.ctl.approve(job)
 
@@ -118,6 +119,26 @@ class CompanyControlTests(unittest.TestCase):
         with self.assertRaisesRegex(EcoError, "Global daily"):
             self.ctl.guard.reserve(run_id="r-extra", project_id="different",
                                    role="product")
+
+    def test_iteration_cap_blocks_without_spawning_reviewers(self):
+        jobid = self.submit()
+        self.ctl.approve(jobid)
+        stageid = jobid + ":backend"
+        self.ctl.guard.reserve(run_id=stageid, project_id=jobid, role="backend")
+        native_task = {"id": "task-test", "status": "blocked",
+                       "assignee": "companybackend",
+                       "model_override": "gpt-5.6-luna",
+                       "provider_override": "openai-codex"}
+        native_run = {"profile": "companybackend", "status": "gave_up",
+                      "error": "Iteration budget exhausted (12/12)"}
+        step = {"id": stageid, "task_id": "task-test", "role": "backend",
+                "status": "reserved"}
+        with patch("company_control.read_native", return_value=(native_task, native_run)):
+            self.ctl._reconcile(self.ctl.row(jobid), step)
+        self.assertEqual(self.ctl.row(jobid)["status"], "blocked")
+        self.assertIn("Iteration budget exhausted", self.ctl.row(jobid)["error"])
+        self.assertEqual(self.ctl.stages(jobid), [])
+        self.assertEqual(self.ctl.guard.report(jobid)["total_starts"], 1)
 
 
 if __name__ == "__main__":
