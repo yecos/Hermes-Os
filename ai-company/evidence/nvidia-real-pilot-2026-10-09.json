@@ -1,0 +1,66 @@
+{
+    "schema_version":  1,
+    "date":  "2026-10-09",
+    "status":  "partial_no_architecture_verdict",
+    "execution_type":  "real_nvidia_api_calls_not_native_hermes_kanban",
+    "nvidia_model":  "openai/gpt-oss-20b",
+    "code_repository":  "C:\\Dev\\HermesNvidiaPilotCSV",
+    "commit_sha":  "a611a523586dbc6d228d9c73b48f0ce73d080069",
+    "requested_function":  "summarize_expenses(csv_text: str)",
+    "deterministic_tests":  {
+                                "passed":  9,
+                                "failed":  0,
+                                "static_ast_review":  "pass"
+                            },
+    "builder":  {
+                    "first_response":  "created_module_8_of_9_tests_passed",
+                    "repair_response":  "corrected_unicode_digits_validation_9_of_9_passed",
+                    "final_usage":  {
+                                        "model":  "openai/gpt-oss-20b",
+                                        "finish_reason":  "stop",
+                                        "prompt_tokens":  420,
+                                        "completion_tokens":  330,
+                                        "duration_seconds":  18.3
+                                    }
+                },
+    "product":  {
+                    "response":  "APPROVED:a611a523586dbc6d228d9c73b48f0ce73d080069",
+                    "usage":  {
+                                  "model":  "openai/gpt-oss-20b",
+                                  "finish_reason":  "stop",
+                                  "prompt_tokens":  1317,
+                                  "completion_tokens":  121,
+                                  "duration_seconds":  7.81
+                              },
+                    "reviewer_model":  "same_NVIDIA_model_separate_request"
+                },
+    "architect":  {
+                      "verdict":  null,
+                      "reason":  "output_limit_without_visible_content",
+                      "first_limit":  450,
+                      "last_limit":  1200,
+                      "last_usage":  {
+                                         "model":  "openai/gpt-oss-20b",
+                                         "finish_reason":  "length",
+                                         "prompt_tokens":  1308,
+                                         "completion_tokens":  1200,
+                                         "duration_seconds":  49.91
+                                     },
+                      "explicitly_not_approved":  true
+                  },
+    "codex_eco":  {
+                      "daily_starts_before":  4,
+                      "daily_starts_after":  4,
+                      "global_daily_cap":  4,
+                      "production_profiles_changed":  false
+                  },
+    "no_deployment":  true,
+    "no_merge":  true,
+    "known_limitations":  [
+                              "NVIDIA used direct API calls; native six-profile Hermes orchestration has not been validated with NVIDIA.",
+                              "Product gave exact SHA-bound approval but no written review rationale.",
+                              "Architecture did not return a verifiable verdict in either bounded request.",
+                              "Token figures include reasoning output and are not ChatGPT subscription credits.",
+                              "No automatic provider fallback or quota bypass was configured."
+                          ]
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "mode": "codex_balanced",
+  "provider": "openai-codex",
+  "target": "six_hermes_profiles",
+  "enforcement_status": "controller_limited_native_kanban",
+  "limits": {
+    "max_active_directors": 1,
+    "max_active_builders": 1,
+    "max_active_reviewers": 1,
+    "daily_starts_per_project": 3,
+    "daily_starts_per_role_per_project": 1,
+    "daily_global_starts": 4,
+    "backoff_seconds_on_429": [
+      300,
+      900,
+      3600
+    ],
+    "require_idempotent_run_ids": true,
+    "require_reconciliation_before_retry": true,
+    "nested_delegation_allowed": false,
+    "pause_on_provider_429": true
+  },
+  "roles": {
+    "director": {
+      "profile": "companydirector",
+      "model": "gpt-5.6-sol",
+      "max_iterations": 12,
+      "max_runtime_seconds": 900,
+      "max_output_tokens": 4096
+    },
+    "product": {
+      "profile": "companyproduct",
+      "model": "gpt-6-luna",
+      "max_iterations": 8,
+      "max_runtime_seconds": 420,
+      "max_output_tokens": 2048
+    },
+    "architect": {
+      "profile": "companyarchitect",
+      "model": "gpt-6-luna",
+      "max_iterations": 8,
+      "max_runtime_seconds": 420,
+      "max_output_tokens": 2048
+    },
+    "frontend": {
+      "profile": "companyfrontend",
+      "model": "gpt-5.6-luna",
+      "max_iterations": 12,
+      "max_runtime_seconds": 600,
+      "max_output_tokens": 3072
+    },
+    "backend": {
+      "profile": "companybackend",
+      "model": "gpt-5.6-luna",
+      "max_iterations": 12,
+      "max_runtime_seconds": 600,
+      "max_output_tokens": 3072
+    },
+    "integrations": {
+      "profile": "companyintegrations",
+      "model": "gpt-5.6-luna",
+      "max_iterations": 12,
+      "max_runtime_seconds": 600,
+      "max_output_tokens": 3072
+    }
+  },
+  "usage": {
+    "local_database": "ai-company-eco.sqlite3",
+    "telemetry_sources": [
+      "hermes",
+      "provider"
+    ],
+    "unknown_tokens_are_null": true,
+    "cached_input_tokens_are_subset_of_input": true,
+    "no_prompts_or_secrets_in_ledger": true,
+    "codex_subscription_quota_is_not_inferred_from_tokens": true
+  }
+}

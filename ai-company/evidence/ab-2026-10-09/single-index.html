@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Control de gastos</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:1rem;background:#f4f4f4;color:#333}
+h1{font-size:1.5rem;margin-bottom:.5rem}
+form{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;background:#fff;padding:.5rem;border-radius:.3rem}
+label{display:block;font-weight:600;margin-bottom:.2rem}
+input{padding:.3rem;border:1px solid #ccc;border-radius:.2rem;width:100%}
+input[type=number]{-moz-appearance:textfield}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{appearance:none;margin:0}
+button{padding:.4rem 1rem;border:none;border-radius:.2rem;background:#007bff;color:#fff;cursor:pointer}
+button:hover{background:#0056b3}
+ul{list-style:none;padding:0;margin:0}
+li{background:#fff;margin-bottom:.3rem;padding:.5rem;border-radius:.2rem;display:flex;justify-content:space-between;align-items:center}
+li span{flex:1}
+.delete{background:#dc3545;color:#fff;padding:.2rem .5rem;border:none;border-radius:.2rem;cursor:pointer}
+.delete:hover{background:#a71d2a}
+#total{font-weight:700;margin-top:.5rem}
+.filter{margin-bottom:1rem}
+@media(min-width:600px){form{flex-wrap:nowrap}label{margin-right:.5rem}input{width:auto}}
+</style>
+</head>
+<body>
+<h1>Control de gastos</h1>
+<form id="expense-form" novalidate>
+<div class="filter">
+<label for="filter">Filtrar por categoría:</label>
+<select id="filter"><option value="all">Todas</option></select>
+</div>
+<div>
+<label for="date">Fecha</label>
+<input type="date" id="date" required>
+</div>
+<div>
+<label for="category">Categoría</label>
+<input type="text" id="category" required>
+</div>
+<div>
+<label for="amount">Monto (COP)</label>
+<input type="number" id="amount" min="1" step="1" required>
+</div>
+<button type="submit" id="add">Agregar</button>
+</form>
+<ul id="expense-list"></ul>
+<div id="total" data-total="0">Total: 0 COP</div>
+<script>
+(function(){
+const STORAGE_KEY='hermes_expenses_v1';
+const form=document.getElementById('expense-form');
+const dateInput=document.getElementById('date');
+const catInput=document.getElementById('category');
+const amtInput=document.getElementById('amount');
+const list=document.getElementById('expense-list');
+const totalEl=document.getElementById('total');
+const filterSel=document.getElementById('filter');
+let expenses=[];
+function load(){const data=localStorage.getItem(STORAGE_KEY);expenses=data?JSON.parse(data):[];render();}
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(expenses));}
+function addExpense(e){e.preventDefault();const date=dateInput.value;const cat=catInput.value.trim();const amt=parseInt(amtInput.value,10);if(!date||!cat||isNaN(amt)||amt<1){const msg=document.createElement('div');msg.style.color='red';msg.textContent='Todos los campos son obligatorios y el monto debe ser positivo.';form.prepend(msg);setTimeout(()=>msg.remove(),3000);return;}const id=Date.now();expenses.push({id,date,cat,amt});save();render();form.reset();}
+function deleteExpense(id){expenses=expenses.filter(e=>e.id!==id);save();render();}
+function render(){list.innerHTML='';let total=0;const catSet=new Set();expenses.forEach(exp=>{catSet.add(exp.cat);if(filterSel.value==='all'||filterSel.value===exp.cat){const li=document.createElement('li');const span=document.createElement('span');span.textContent=`${exp.date} - ${exp.cat} - ${exp.amt.toLocaleString('es-CO')}`;const del=document.createElement('button');del.textContent='Eliminar';del.className='delete';del.dataset.delete=exp.id;del.addEventListener('click',()=>deleteExpense(exp.id));li.append(span,del);list.append(li);}total+=exp.amt;});totalEl.dataset.total=total;totalEl.textContent=`Total: ${total.toLocaleString('es-CO')} COP`;populateFilter(catSet);}
+function populateFilter(set){filterSel.innerHTML='<option value="all">Todas</option>';set.forEach(c=>{const opt=document.createElement('option');opt.value=c;opt.textContent=c;filterSel.append(opt);});}
+filterSel.addEventListener('change',render);
+form.addEventListener('submit',addExpense);
+load();
+})();
+</script>
+</body>
+</html>

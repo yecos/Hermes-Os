@@ -1,0 +1,130 @@
+{
+  "kind": "real_native_delegation_e2e",
+  "recorded_at": "2026-10-08T20:54:22-05:00",
+  "engine": {
+    "branch": "feature/ai-company-phase2-native-loop",
+    "commit": "e0236e4fe988abf80d5ad7be5b2a96bdf8a6a6ae",
+    "base_pr_head": "2d1b019aeab4cecddb8ea78a3cff9ade8af4b86b",
+    "unit_tests_passed": 19,
+    "unit_tests_failed": 0,
+    "diff_check_passed": true,
+    "independent_review": {
+      "delegation_id": "deleg_51aa8f7a",
+      "verdict": "approved",
+      "blocking_findings": []
+    }
+  },
+  "agents": {
+    "director": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "status": "active_and_verified"
+    },
+    "product": {
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "status": "connectivity_verified_role_e2e_pending",
+      "historical_e2e_model": "gpt-5.6-sol"
+    },
+    "architect": {
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "status": "connectivity_verified_role_e2e_pending",
+      "historical_e2e_model": "gpt-5.6-sol"
+    },
+    "frontend": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna",
+      "status": "connectivity_verified_role_not_exercised"
+    },
+    "backend": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna",
+      "status": "connectivity_verified_role_e2e_pending",
+      "historical_e2e_model": "gpt-5.6-sol"
+    },
+    "integrations": {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna",
+      "status": "connectivity_verified_role_not_exercised"
+    }
+  },
+  "model_connectivity_tests": [
+    {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-sol",
+      "result": "active_current_session"
+    },
+    {
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "result": "passed",
+      "session_id": "20261008_210228_b056cc"
+    },
+    {
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna",
+      "result": "passed",
+      "session_id": "20261008_210252_ca6df1"
+    }
+  ],
+  "source": {
+    "platform": "telegram",
+    "chat_type": "dm",
+    "gateway_bound_envelope": true,
+    "owner_allowlist_matched": true,
+    "personal_identifier_committed": false
+  },
+  "workflow": {
+    "project_id": "77272a344d44",
+    "task_id": "9a6d2a05694e",
+    "run_id": "54cb7ef70646",
+    "builder_role": "backend",
+    "final_task_state": "accepted",
+    "run_status": "completed"
+  },
+  "builder": {
+    "delegation_id": "deleg_9fb9eb1f",
+    "receipt_verified_in_hermes_registry": true,
+    "base_sha": "a2283fdb0411ec37b863687e48d2d0c8b383752a",
+    "head_sha": "85b7063af56e228ebb1373c70e10b73f4fa031fa",
+    "changed_files": [
+      "quote.py",
+      "tests/test_quote.py"
+    ],
+    "tdd_red_observed": true,
+    "verification_command": "python -m unittest discover -s tests -v",
+    "verification_returncode": 0,
+    "verification_output_sha256": "e9c1a982d828ff56cf94c6b03093a10ebc2bbf195798a3661db13ade1a5b27bc",
+    "tests_run": 3,
+    "tests_passed": 3,
+    "worktree_clean_before_and_after": true
+  },
+  "reviews": [
+    {
+      "reviewer": "product",
+      "delegation_id": "deleg_276d58c0",
+      "receipt_verified_in_hermes_registry": true,
+      "head_sha": "85b7063af56e228ebb1373c70e10b73f4fa031fa",
+      "verdict": "approved",
+      "tests_passed": true,
+      "worktree_clean": true
+    },
+    {
+      "reviewer": "architect",
+      "delegation_id": "deleg_6dfab25e",
+      "receipt_verified_in_hermes_registry": true,
+      "head_sha": "85b7063af56e228ebb1373c70e10b73f4fa031fa",
+      "verdict": "approved",
+      "tests_passed": true,
+      "worktree_clean": true
+    }
+  ],
+  "safety": {
+    "preview_created": false,
+    "deployment_executed": false,
+    "merge_executed": false,
+    "production_data_used": false,
+    "demo_repository_isolated": true
+  }
+}

@@ -1,6 +1,6 @@
 # Hermes AI Company — Fase 2: orquestación real
 
-Estado: **diseño e implementación pendientes**, no confundir con el motor H1, que ya pasó pruebas de flujo simulado.
+Estado: **primer tracer bullet implementado en rama de desarrollo**. El motor H1 ya puede registrar un DM autenticado del gateway, enlazar un constructor nativo de `delegate_task`, verificar su commit y pruebas, y exigir dos supervisores independientes sobre el mismo SHA. Siguen pendientes la operación durable de seis perfiles, recuperación tras reinicio y ejecución distribuida; consulta `PHASE-2-NATIVE-RUNBOOK.md`.
 
 ## Decisión de arquitectura
 

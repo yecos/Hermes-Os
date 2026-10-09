@@ -1,0 +1,22 @@
+{
+  "kind": "six_isolated_profile_smoke",
+  "status": "partial_not_full_dispatch_e2e",
+  "provider": "openai-codex",
+  "profiles": {
+    "director": {"profile":"companydirector","model":"gpt-5.6-sol","session_id":"20261008_211459_8dec70","result":"ROLE_DIRECTOR_OK"},
+    "product": {"profile":"companyproduct","model":"gpt-6-luna","session_id":"20261008_211519_374f25","result":"ROLE_PRODUCT_OK"},
+    "architect": {"profile":"companyarchitect","model":"gpt-6-luna","session_id":"20261008_211537_ddf7c9","result":"ROLE_ARCHITECT_OK"},
+    "frontend": {"profile":"companyfrontend","model":"gpt-5.6-luna","session_id":"20261008_211556_4c84fe","result":"ROLE_FRONTEND_OK"},
+    "backend": {"profile":"companybackend","model":"gpt-5.6-luna","session_id":"20261008_211615_539064","result":"ROLE_BACKEND_OK"},
+    "integrations": {"profile":"companyintegrations","model":"gpt-5.6-luna","session_id":"20261008_211634_46eb5d","result":"ROLE_INTEGRATIONS_OK"}
+  },
+  "telegram_gateway": "default_profile_only",
+  "secondary_gateways_started": false,
+  "pending": [
+    "external durable role dispatcher",
+    "automatic restart and 429 recovery",
+    "worktree lifecycle automation",
+    "full Director-builder-two-reviewer E2E through isolated profiles"
+  ],
+  "production_deployed": false
+}

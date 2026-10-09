@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "recorded_date": "2026-10-09",
+  "project_id": "job-b03468569484",
+  "type": "real_codex_eco_pilot",
+  "status": "blocked_awaiting_architecture_review",
+  "base_sha": "c5ae6600f45cd1c4122c55604729d51c2e5eaa6a",
+  "builder_sha": "e677b8b4f9dc1154a5e26f4a9fd2de9ef293aa63",
+  "repo_deployed": false,
+  "merged": false,
+  "total_model_starts": 4,
+  "limits": {
+    "codex_only": true,
+    "global_daily_starts": 4,
+    "one_scoped_builder_retry": true
+  },
+  "stages": [
+    {
+      "role": "backend",
+      "profile": "companybackend",
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna",
+      "native_task": "t_6dcf2e59",
+      "native_outcome": "gave_up",
+      "reason": "iteration_budget_12",
+      "receipt_accepted": false
+    },
+    {
+      "role": "backend",
+      "profile": "companybackend",
+      "provider": "openai-codex",
+      "model": "gpt-5.6-luna",
+      "native_task": "t_813a0ad1",
+      "native_outcome": "completed",
+      "receipt_accepted": true,
+      "sha": "e677b8b4f9dc1154a5e26f4a9fd2de9ef293aa63",
+      "tests_passed": 2,
+      "tests_failed": 0
+    },
+    {
+      "role": "product",
+      "profile": "companyproduct",
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "native_task": "t_45951cf7",
+      "native_outcome": "completed",
+      "receipt_accepted": true,
+      "verdict": "APPROVED",
+      "sha": "e677b8b4f9dc1154a5e26f4a9fd2de9ef293aa63",
+      "tests_passed": 2
+    },
+    {
+      "role": "architect",
+      "profile": "companyarchitect",
+      "provider": "openai-codex",
+      "model": "gpt-6-luna",
+      "native_task": "t_52fd7f59",
+      "native_outcome": "gave_up",
+      "receipt_accepted": false,
+      "reason": "iteration_budget_8",
+      "verdict": null
+    }
+  ],
+  "notes": [
+    "Builder retry was explicitly authorized; only one extra retry on the same UTC date without increasing global cap.",
+    "False dirty-tree alert was caused by managed .worktrees and corrected after verifying the Product SHA-bound native receipt.",
+    "No valid Architecture verdict exists; do not mark project accepted or complete.",
+    "No merge or deployment occurred; no additional Codex starts are authorized within the current day.",
+    "Usage snapshots remain local, not published to GitHub. Reported tokens are not ChatGPT subscription credits."
+  ]
+}

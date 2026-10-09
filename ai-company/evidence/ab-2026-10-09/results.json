@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-09",
+  "provider": "NVIDIA NIM",
+  "model": "openai/gpt-oss-20b",
+  "task": "offline expenses tracking web app with responsive UI and localStorage",
+  "conditions": "Same requirements and same builder prompt/model; multi adds Product and Architecture reviews using same model; stages serial.",
+  "single": {
+    "api_calls": 1,
+    "input_tokens": 441,
+    "output_tokens": 1110,
+    "total_tokens": 1551,
+    "model_seconds": 79.65,
+    "browser_tests_passed": 11,
+    "browser_tests_total": 11,
+    "steps": [
+      {
+        "variant": "single",
+        "stage": "build",
+        "model": "openai/gpt-oss-20b",
+        "finish_reason": "stop",
+        "input_tokens": 441,
+        "output_tokens": 1110,
+        "elapsed_seconds": 79.65,
+        "visible_length": 4079
+      }
+    ]
+  },
+  "multi": {
+    "api_calls": 3,
+    "input_tokens": 4151,
+    "output_tokens": 1675,
+    "total_tokens": 5826,
+    "model_seconds": 109.77,
+    "browser_tests_passed": 11,
+    "browser_tests_total": 11,
+    "steps": [
+      {
+        "variant": "multi",
+        "stage": "build",
+        "model": "openai/gpt-oss-20b",
+        "finish_reason": "stop",
+        "input_tokens": 441,
+        "output_tokens": 1104,
+        "elapsed_seconds": 69.97,
+        "visible_length": 3992
+      },
+      {
+        "variant": "multi",
+        "stage": "product",
+        "model": "openai/gpt-oss-20b",
+        "finish_reason": "stop",
+        "input_tokens": 1851,
+        "output_tokens": 509,
+        "elapsed_seconds": 35.9,
+        "visible_length": 67
+      },
+      {
+        "variant": "multi",
+        "stage": "architect",
+        "model": "openai/gpt-oss-20b",
+        "finish_reason": "stop",
+        "input_tokens": 1859,
+        "output_tokens": 62,
+        "elapsed_seconds": 3.9,
+        "visible_length": 135
+      }
+    ],
+    "product_review": "APPROVED  \nEl código cumple con todos los requisitos especificados.",
+    "architect_review": "APPROVED  \nEl código cumple con los requisitos de persistencia, validación, filtrado, accesibilidad y no contiene vulnerabilidades XSS."
+  },
+  "tokens_ratio_multi_over_single": 3.76,
+  "percent_more_model_time_multi": 37.8,
+  "verdict_for_this_one_task": "single agent equally functional and materially more token efficient",
+  "limits": [
+    "One application and one run per method; provider latency and generated output can vary.",
+    "Same underlying model in every role, not full native Hermes six-profile orchestration.",
+    "Reviewer approvals were text responses, not formal tool-executed code review and not SHA-bound.",
+    "Eleven Chrome tests do not establish exhaustive security, maintainability or accessibility.",
+    "No provider invoice or NVIDIA per-token cost was available; tokens are a usage proxy.",
+    "Network/DNS failures before API completion were excluded from measured model processing durations.",
+    "No production provider/model/budget settings were changed and no production rollout occurred."
+  ]
+}
