@@ -98,3 +98,5 @@ Consulta el [protocolo de operación](PROTOCOL.md) para reglas de autoridad, est
 El primer tracer bullet de los pasos 1–2 está documentado en el
 [runbook de delegación nativa](PHASE-2-NATIVE-RUNBOOK.md); no debe confundirse
 con la operación duradera de los seis roles.
+
+Windows + perfiles Hermes 0.20.2: [ECO-WINDOWS-RUNBOOK.md](ECO-WINDOWS-RUNBOOK.md) contiene la instalacion, validacion, rollback y limites reales del Modo ECO.
