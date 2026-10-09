@@ -91,6 +91,15 @@ class CompanyControlTests(unittest.TestCase):
         task = {"result": "APPROVED:" + self.base}
         run = {"profile": "companyproduct", "outcome": "completed", "summary": ""}
         self.ctl._verify_review(row, "product", task, run)
+        # Kanban-managed nested Git worktrees must not count as source edits.
+        nested = self.repo / ".worktrees" / "existing-task"
+        nested.mkdir(parents=True)
+        (nested / "scratch.txt").write_text("managed worktree artifact", encoding="utf-8")
+        self.ctl._verify_review(row, "product", task, run)
+        (self.repo / "unexpected.txt").write_text("unauthorized edit", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "Main review repository changed"):
+            self.ctl._verify_review(row, "product", task, run)
+        (self.repo / "unexpected.txt").unlink()
         with self.assertRaisesRegex(RuntimeError, "mismatch"):
             self.ctl._verify_review(row, "architect", task, run)
         task["result"] = "Looks fine"

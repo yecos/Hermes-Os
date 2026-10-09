@@ -114,7 +114,44 @@ class EcoUsageLedger:
             provider TEXT PRIMARY KEY, strikes INTEGER NOT NULL,
             until_ts REAL NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS eco_retry_authorizations (
+            project_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            original_run_id TEXT NOT NULL,
+            authorized_at REAL NOT NULL,
+            PRIMARY KEY(project_id, role)
+        );
         """)
+
+    def authorize_single_retry(self, *, project_id: str, role: str,
+                               original_run_id: str, at: float | None = None) -> None:
+        """One explicit extra start, scoped to a failed run, without raising global cap."""
+        if role not in BUILDERS:
+            raise EcoError("Only a failed builder can receive this retry authorization")
+        now = time.time() if at is None else at
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            prior = self.db.execute(
+                "SELECT status,project_id,role FROM eco_runs WHERE run_id=?",
+                (original_run_id,)
+            ).fetchone()
+            if (prior is None or prior["project_id"] != project_id or
+                    prior["role"] != role or prior["status"] != "failed"):
+                raise EcoError("Retry requires a completed failed run of the same project and role")
+            other = self.db.execute(
+                "SELECT 1 FROM eco_retry_authorizations WHERE project_id=?",
+                (project_id,)
+            ).fetchone()
+            if other:
+                raise EcoError("Project already has a retry authorization")
+            self.db.execute(
+                "INSERT INTO eco_retry_authorizations VALUES (?,?,?,?)",
+                (project_id, role, original_run_id, now)
+            )
+            self.db.commit()
+        except BaseException:
+            self.db.rollback()
+            raise
 
     def close(self) -> None:
         self.db.close()
@@ -157,11 +194,19 @@ class EcoUsageLedger:
                 global_count = self.db.execute(
                     "SELECT COUNT(*) FROM eco_runs WHERE started_at>=?", (day_start,)
                 ).fetchone()[0]
+                authorized = self.db.execute(
+                    "SELECT role,authorized_at FROM eco_retry_authorizations WHERE project_id=?",
+                    (project_id,)
+                ).fetchone()
+                valid_today = bool(authorized and authorized["authorized_at"] >= day_start
+                                   and authorized["authorized_at"] < day_start + 86400)
+                extra_project = 1 if valid_today else 0
+                extra_role = 1 if valid_today and authorized["role"] == role else 0
                 if global_count >= limits["daily_global_starts"]:
                     raise EcoError("Global daily Codex session-start budget exhausted")
-                if count >= limits["daily_starts_per_project"]:
+                if count >= limits["daily_starts_per_project"] + extra_project:
                     raise EcoError("Daily project session-start budget exhausted")
-                if role_count >= limits["daily_starts_per_role_per_project"]:
+                if role_count >= limits["daily_starts_per_role_per_project"] + extra_role:
                     raise EcoError("Daily role session-start budget exhausted")
 
                 group = _role_group(role)
@@ -249,6 +294,45 @@ class EcoUsageLedger:
                     self.db.execute(
                         "DELETE FROM eco_cooldowns WHERE provider=?", (run["provider"],)
                     )
+            self.db.commit()
+        except BaseException:
+            self.db.rollback()
+            raise
+
+    def reconcile_verified_review(self, *, run_id: str, reviewer_role: str,
+                                  task_id: str, commit_sha: str) -> None:
+        """Correct one failed receipt after independently verifying native review.
+
+        Does not reserve another session; records the manual reconciliation
+        evidence to make the correction auditable.
+        """
+        if reviewer_role not in REVIEWERS or not task_id.strip() or len(commit_sha) != 40:
+            raise EcoError("Invalid independent review reconciliation evidence")
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            self.db.execute("""
+                CREATE TABLE IF NOT EXISTS eco_review_reconciliations (
+                    run_id TEXT PRIMARY KEY, reviewer_role TEXT NOT NULL,
+                    native_task_id TEXT NOT NULL, commit_sha TEXT NOT NULL,
+                    reconciled_at REAL NOT NULL
+                )
+            """)
+            old = self.db.execute(
+                "SELECT role,status FROM eco_runs WHERE run_id=?", (run_id,)
+            ).fetchone()
+            if not old or old["role"] != reviewer_role or old["status"] != "failed":
+                raise EcoError("Only an existing failed reviewer reservation can be corrected")
+            if self.db.execute(
+                "SELECT 1 FROM eco_review_reconciliations WHERE run_id=?", (run_id,)
+            ).fetchone():
+                raise EcoError("Review has already been reconciled")
+            self.db.execute(
+                "INSERT INTO eco_review_reconciliations VALUES (?,?,?,?,?)",
+                (run_id, reviewer_role, task_id, commit_sha, time.time())
+            )
+            self.db.execute(
+                "UPDATE eco_runs SET status='ok' WHERE run_id=?", (run_id,)
+            )
             self.db.commit()
         except BaseException:
             self.db.rollback()

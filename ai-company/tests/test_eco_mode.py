@@ -147,6 +147,60 @@ class EcoModeTests(unittest.TestCase):
         self.complete("b1", status="cancelled")
         self.assertEqual(self.reserve("b2", project_id="pilot2"), "reserved")
 
+    def test_one_owner_authorized_retry_keeps_global_budget(self):
+        self.reserve("initial", "backend")
+        self.complete("initial", status="failed")
+        self.ledger.authorize_single_retry(
+            project_id="pilot", role="backend", original_run_id="initial",
+            at=self.now + 5,
+        )
+        with self.assertRaisesRegex(EcoError, "already has"):
+            self.ledger.authorize_single_retry(
+                project_id="pilot", role="backend", original_run_id="initial")
+        self.assertEqual(self.reserve("second", "backend"), "reserved")
+        self.complete("second")
+        with self.assertRaisesRegex(EcoError, "role session-start"):
+            self.reserve("third", "backend")
+        self.assertEqual(self.reserve("product", "product"), "reserved")
+        self.complete("product")
+        self.assertEqual(self.reserve("architect", "architect"), "reserved")
+        self.complete("architect")
+        with self.assertRaisesRegex(EcoError, "Global daily"):
+            self.reserve("fifth", "frontend", project_id="new-project")
+        # The special second attempt is authorized only for its original UTC day.
+        tomorrow = self.now + 86400
+        self.assertEqual(self.reserve("tomorrow1", "backend", at=tomorrow), "reserved")
+        self.complete("tomorrow1", at=tomorrow + 1)
+        with self.assertRaisesRegex(EcoError, "role session-start"):
+            self.reserve("tomorrow2", "backend", at=tomorrow + 2)
+
+    def test_retry_requires_real_failed_run(self):
+        self.reserve("first")
+        with self.assertRaisesRegex(EcoError, "completed failed run"):
+            self.ledger.authorize_single_retry(
+                project_id="pilot", role="backend", original_run_id="first")
+        self.complete("first")
+        with self.assertRaisesRegex(EcoError, "completed failed run"):
+            self.ledger.authorize_single_retry(
+                project_id="pilot", role="backend", original_run_id="first")
+
+    def test_verified_review_reconciliation_does_not_consume_new_start(self):
+        self.reserve("product1", "product")
+        self.complete("product1", "failed")
+        self.ledger.reconcile_verified_review(
+            run_id="product1", reviewer_role="product",
+            task_id="t_test123", commit_sha="a" * 40)
+        self.assertEqual(self.ledger.report("pilot")["total_starts"], 1)
+        self.assertEqual(
+            self.ledger.db.execute(
+                "SELECT status FROM eco_runs WHERE run_id='product1'"
+            ).fetchone()[0], "ok"
+        )
+        with self.assertRaises(EcoError):
+            self.ledger.reconcile_verified_review(
+                run_id="product1", reviewer_role="product",
+                task_id="t_test123", commit_sha="a" * 40)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -138,6 +138,74 @@ class Controller:
         # Upgrade pre-fix pending jobs whose stage was stored as "builder".
         self.update_job(jobid, "queued", stage=row["role"])
 
+    def retry_failed_builder_once(self, jobid: str) -> str:
+        """Explicitly authorized second launch, preserving the first worktree.
+
+        Creates a distinct native card, stage ID and ledger run. No quota bypass:
+        only one failed builder can be retried once; global limit remains four.
+        """
+        job = self.row(jobid)
+        if job["status"] != "blocked" or job["stage"] != job["role"]:
+            raise ValueError("Only the first failed builder stage may be retried")
+        original_id = jobid + ":" + job["role"]
+        stage = self.db.execute("SELECT * FROM stages WHERE id=?",
+                                (original_id,)).fetchone()
+        if stage is None:
+            raise ValueError("Original builder stage is missing")
+        orig = read_native(self.board_path, task_id=stage["task_id"])
+        if orig is None or orig[0]["status"] != "blocked":
+            raise ValueError("Original native task is not safely blocked")
+        if orig[1] is None or orig[1].get("outcome") not in {"gave_up", "timed_out", "failed"}:
+            raise ValueError("Original run is not a completed failure")
+        if orig[0]["assignee"] != self.policy["roles"][job["role"]]["profile"]:
+            raise ValueError("Original task profile mismatch")
+        workspace = Path(str(orig[0].get("workspace_path") or ""))
+        if not workspace.is_dir() or git(str(workspace), "rev-parse", "HEAD") != job["base_sha"]:
+            raise ValueError("Original worktree missing or base SHA changed")
+        if not (workspace / "normalizer.py").is_file() or not (workspace / "tests").is_dir():
+            raise ValueError("Partial builder artifacts are missing; refusing retry")
+        stage_id = original_id + ":retry2"
+        if self.db.execute("SELECT 1 FROM stages WHERE id=?", (stage_id,)).fetchone():
+            raise ValueError("Second attempt already exists")
+        # Must have only one prior attempt and the first must already be finalized
+        # in the budget ledger. This authorization does NOT relax the global cap.
+        self.guard.authorize_single_retry(
+            project_id=jobid, role=job["role"], original_run_id=original_id
+        )
+        conf = self.policy["roles"][job["role"]]
+        body = (
+            "ONE FINAL ECO ATTEMPT. Existing files already implement the requested "
+            "function and TWO unittest tests passed in the previous attempt. "
+            "Do not rewrite them or explore unrelated files. "
+            "In the CURRENT workspace run 'python -B -m unittest discover -s tests -v'. "
+            "Remove only generated __pycache__ directories, then git add "
+            "normalizer.py tests/__init__.py tests/test_normalizer.py, "
+            "git commit with a concise message, verify git status is clean, "
+            "and call kanban_complete using FULL 40-char HEAD SHA plus test result. "
+            "Do not deploy, merge, delegate, install dependencies or create cards. "
+            "Commit promptly; max twelve turns. "
+            f"Base SHA: {job['base_sha']}. "
+        )
+        existing = read_native(self.board_path, key=stage_id)
+        if existing is None:
+            native("create", f"{job['title']} [backend retry 2/2]",
+                   "--body", body, "--assignee", conf["profile"],
+                   "--workspace", "dir:" + str(workspace),
+                   "--max-retries", "1",
+                   "--max-runtime", str(conf["max_runtime_seconds"]),
+                   "--model", conf["model"], "--provider", self.policy["provider"],
+                   "--idempotency-key", stage_id, "--initial-status", "blocked", "--json")
+            existing = read_native(self.board_path, key=stage_id)
+        if existing is None or existing[0]["status"] not in {"blocked", "ready"}:
+            raise RuntimeError("Retry native card was not safely created")
+        ts = int(time.time())
+        self.db.execute(
+            "INSERT INTO stages VALUES (?,?,?,?,?,?,?,?)",
+            (stage_id, jobid, job["role"], existing[0]["id"], "created", ts, ts, None)
+        )
+        self.update_job(jobid, "stage_queued", stage=job["role"] + ":retry2")
+        return existing[0]["id"]
+
     def finish_approval(self, jobid: str):
         row = self.row(jobid)
         if row["status"] != "awaiting_owner":
@@ -185,6 +253,11 @@ class Controller:
                 f"containing precisely APPROVED:{job['commit_sha']} "
                 f"(and explanation). Otherwise return REJECTED:{job['commit_sha']} "
                 "with blocking findings; NEVER auto-approve.\n"
+                "Use a short inspection plan: git diff --stat BASE_SHA REVIEW_SHA, "
+                "git show --stat REVIEW_SHA and inspect only changed code/tests; "
+                "check requirements independently. Do not perform prolonged "
+                "repository exploration or regenerate test files. Conclude "
+                "with one explicit SHA-bound verdict before the turn limit.\n"
                 f"REPOSITORY: {job['repository']}\nBASE_SHA: {job['base_sha']}\n"
                 f"REVIEW_SHA: {job['commit_sha']}\n"
                 f"ORIGINAL REQUIREMENTS: {job['spec']}"
@@ -261,8 +334,47 @@ class Controller:
         git(job["repository"], "cat-file", "-e", sha + "^{commit}")
         if git(job["repository"], "rev-parse", "HEAD") != job["base_sha"]:
             raise RuntimeError("Main review checkout changed its commit; approval is unsafe")
-        if git(job["repository"], "status", "--porcelain"):
+        # Native Kanban stores registered isolated worktrees under .worktrees/.
+        # Do not treat that managed directory as a modification to main checkout.
+        # All other untracked or tracked changes continue to block review.
+        if git(job["repository"], "status", "--porcelain", "--", ".",
+               ":(exclude).worktrees"):
             raise RuntimeError("Main review repository changed; approval is unsafe")
+
+    def revalidate_blocked_product_review(self, jobid: str) -> None:
+        """Manually reconcile a real, completed SHA-bound approval after false alarm."""
+        job = self.row(jobid)
+        if (job["status"] != "blocked" or job["stage"] != "product" or
+                job["error"] != "Main review repository changed; approval is unsafe"):
+            raise ValueError("Only the known false-positive product review can be reconciled")
+        stage_id = jobid + ":product"
+        step = self.db.execute(
+            "SELECT * FROM stages WHERE id=?", (stage_id,)
+        ).fetchone()
+        if not step or step["status"] != "reserved":
+            raise RuntimeError("Product review is not in the expected state")
+        native_row = read_native(self.board_path, task_id=step["task_id"])
+        if native_row is None or native_row[0]["status"] != "done":
+            raise RuntimeError("No completed native reviewer receipt")
+        task, run = native_row
+        expected = self.policy["roles"]["product"]
+        if (task["assignee"] != expected["profile"] or
+                task["model_override"] != expected["model"] or
+                task["provider_override"] != self.policy["provider"]):
+            raise RuntimeError("Native reviewer identity/model mismatch")
+        self._verify_review(job, "product", task, run)
+        self.guard.reconcile_verified_review(
+            run_id=stage_id, reviewer_role="product",
+            task_id=task["id"], commit_sha=job["commit_sha"]
+        )
+        self.db.execute(
+            "UPDATE stages SET status='verified', evidence=?, updated_at=? WHERE id=?",
+            (json.dumps({"sha": job["commit_sha"], "native_task": task["id"],
+                         "native_run_id": run["id"], "profile": run["profile"],
+                         "manual_reconciliation": "managed Git worktree excluded"}),
+             int(time.time()), stage_id)
+        )
+        self.update_job(jobid, "queued", stage="architect")
 
     def _reconcile(self, job: dict, step: dict):
         row = read_native(self.board_path, task_id=step["task_id"])
@@ -414,7 +526,7 @@ def execute():
     submit.add_argument("--spec", required=True)
     submit.add_argument("--repo", required=True)
     submit.add_argument("--role", default="backend", choices=sorted(BUILDER_ROLES))
-    for name in ("approve", "accept", "status"):
+    for name in ("approve", "retry-builder-once", "revalidate-product", "accept", "status"):
         c = cmds.add_parser(name)
         c.add_argument("jobid")
     cmds.add_parser("tick")
@@ -429,6 +541,14 @@ def execute():
         elif args.command == "approve":
             ctl.approve(args.jobid)
             result = {"job_id": args.jobid, "status": "queued"}
+        elif args.command == "retry-builder-once":
+            task_id = ctl.retry_failed_builder_once(args.jobid)
+            result = {"job_id": args.jobid, "retry_task_id": task_id,
+                      "status": "stage_queued", "requires_budget_reservation": True}
+        elif args.command == "revalidate-product":
+            ctl.revalidate_blocked_product_review(args.jobid)
+            result = {"job_id": args.jobid, "status": "queued",
+                      "stage": "architect", "new_model_calls": 0}
         elif args.command == "accept":
             ctl.finish_approval(args.jobid)
             result = {"job_id": args.jobid, "status": "accepted", "deployed": False}
