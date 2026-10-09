@@ -2,6 +2,18 @@
 
 Módulo experimental aislado dentro de Hermes OS. El propietario utilizará **una sola conversación con el Director en Telegram**, por medio del gateway de mensajería que ya incorpora Hermes Agent; **no crearemos otro bot**.
 
+## Modo ECO equilibrado (preparado, NO activo en Hermes)
+
+La política Codex-only está en [`eco-policy.json`](eco-policy.json) y su guía en
+[`ECO-MODE.md`](ECO-MODE.md). `eco_mode.py` implementa reservas SQLite,
+cuotas por rol/proyecto, protección contra duplicados, backoff global ante
+HTTP 429 y un registro de tokens recibidos mediante telemetría. Sus tests
+están en `tests/test_eco_mode.py`.
+
+**Pendiente imprescindible:** conectar la guardia al despachador real de
+sesiones Hermes. Publicar este módulo no cambia automáticamente los seis
+perfiles del PC ni mide el consumo privado de la suscripción.
+
 ## Estado actual
 
 **Implementado y probado localmente:** motor de proyectos, tareas, bitácora de eventos, evidencia obligatoria, revisión funcional y técnica por separado, escalamiento por errores y solicitudes de aprobación ligadas al SHA exacto de un commit. Usa SQLite únicamente para este prototipo inicial.
