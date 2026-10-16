@@ -1,0 +1,56 @@
+name: Hermes full MCP Chat tunnel smoke
+
+on:
+  push:
+    branches:
+      - feat/hermes-full-mcp-chat-tunnel
+    paths:
+      - "scripts/connect-hermes-commander-chat-windows.ps1"
+      - "hermes-node/internal/mcp/full_surface_test.go"
+      - ".github/workflows/hermes-chat-tunnel-smoke.yml"
+  pull_request:
+    paths:
+      - "scripts/connect-hermes-commander-chat-windows.ps1"
+      - "hermes-node/internal/mcp/full_surface_test.go"
+      - ".github/workflows/hermes-chat-tunnel-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go-mcp-contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hermes-node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache-dependency-path: hermes-node/go.mod
+      - run: go test ./internal/mcp -run TestFullHermesToolSurfaceForChatTunnel -v
+      - run: go test ./...
+
+  windows-launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows PowerShell launcher
+        shell: pwsh
+        run: |
+          $path = Join-Path (Get-Location) 'scripts\connect-hermes-commander-chat-windows.ps1'
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count -ne 0) { throw ($errors | Out-String) }
+      - name: Dry-run without credentials or installing anything
+        shell: pwsh
+        run: |
+          $output = & ./scripts/connect-hermes-commander-chat-windows.ps1 -TunnelId tunnel_0123456789abcdef0123456789abcdef -DryRun
+          if ($LASTEXITCODE -ne 0) { throw 'Dry-run failed' }
+          if (-not ($output -match 'launch-windows.ps1')) { throw 'Original Hermes full MCP launcher missing' }
+          if (-not ($output -match 'not modified')) { throw 'Policy preservation promise missing' }
+          if (-not ($output -match 'No network request was made')) { throw 'Dry-run not isolated' }
+          $output | Out-Host
