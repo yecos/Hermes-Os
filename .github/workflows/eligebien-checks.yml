@@ -1,0 +1,23 @@
+name: EligeBien MVP checks
+on:
+  pull_request:
+    paths:
+      - "apps/eligebien/**"
+      - ".github/workflows/eligebien-checks.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify Node.js runtime
+        run: node --version
+      - name: Validate client and API syntax
+        run: |
+          node --check apps/eligebien/api/event.js
+          node --test apps/eligebien/tests/*.test.cjs
