@@ -1,0 +1,26 @@
+{
+  "site": "https://hermes-os-eligebien.vercel.app",
+  "analytics": {
+    "visits": null,
+    "category_events": null,
+    "outbound_clicks": null
+  },
+  "partnerships": [
+    {
+      "name": "impact.com",
+      "status": "research"
+    },
+    {
+      "name": "PartnerStack",
+      "status": "research"
+    },
+    {
+      "name": "Hostinger",
+      "status": "research"
+    }
+  ],
+  "verified": {
+    "approved_commissions_minor": null,
+    "currency": "USD"
+  }
+}
