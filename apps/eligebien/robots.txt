@@ -1,2 +1,3 @@
 User-agent: *
 Allow: /
+Sitemap: https://hermes-os-eligebien.vercel.app/sitemap.xml

@@ -1,0 +1,32 @@
+{
+  "description": "Candidatos sin relación contractual: nunca mostrar como afiliados",
+  "programs": [
+    {
+      "id": "impact-marketplace",
+      "brand": "impact.com Marketplace",
+      "application_url": "https://impact.com/partners/",
+      "status": "research",
+      "approved_countries": [],
+      "allowed_link_hosts": [],
+      "approved_at": null
+    },
+    {
+      "id": "partnerstack",
+      "brand": "PartnerStack Network",
+      "application_url": "https://partnerstack.com/partners-and-publishers",
+      "status": "research",
+      "approved_countries": [],
+      "allowed_link_hosts": [],
+      "approved_at": null
+    },
+    {
+      "id": "hostinger",
+      "brand": "Hostinger",
+      "application_url": "https://www.hostinger.com/affiliates",
+      "status": "research",
+      "approved_countries": [],
+      "allowed_link_hosts": [],
+      "approved_at": null
+    }
+  ]
+}

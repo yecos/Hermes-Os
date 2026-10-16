@@ -21,3 +21,5 @@ jobs:
         run: |
           node --check apps/eligebien/api/event.js
           node --test apps/eligebien/tests/*.test.cjs
+      - name: Validate offers gate
+        run: python3 -m unittest discover -s apps/eligebien/commerce/tests -v
